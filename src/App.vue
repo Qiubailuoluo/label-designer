@@ -1,16 +1,21 @@
 <template>
-  <div>
-    <h1>标签设计器项目</h1>
-    <p>项目已启动，等待产品原型确定...</p>
-  </div>
+  <router-view />
 </template>
 
 <script setup lang="ts">
-// 空脚本 - 后续添加
+// 空脚本，路由视图会自动渲染当前路由对应的组件
 </script>
 
-<style scoped>
-h1 {
-  color: #333;
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  line-height: 1.6;
 }
 </style>
