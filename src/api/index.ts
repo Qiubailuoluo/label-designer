@@ -1,5 +1,12 @@
 import axios from 'axios'
 
+// 定义统一的响应类型
+export interface ApiResponse<T = any> {
+  code: number
+  msg: string
+  data: T | null
+}
+
 // 创建axios实例
 const api = axios.create({
   baseURL: 'http://localhost:8080/api', // 根据你的后端地址调整
