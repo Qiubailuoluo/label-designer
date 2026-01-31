@@ -36,21 +36,44 @@ export const useUserStore = defineStore('user', () => {
   
   // 登录方法
   const userLogin = async (username: string, password: string) => {
+    console.log('开始登录请求...', { username, password: '***' });
     try {
       const response = await login({ username, password })
-      const responseData = response.data
+      console.log('登录API响应:', response);
       
-      if (responseData.code === 200 && responseData.data) {
-        const { accessToken, userInfo } = responseData.data
-        setUserInfo(accessToken, userInfo)
-        return { success: true, data: responseData.data }
+      // 检查响应结构
+      if (!response || typeof response !== 'object') {
+        console.error('服务器返回数据格式错误:', response);
+        return { success: false, error: '服务器返回数据格式错误' };
       }
       
-      return { success: false, error: responseData.msg }
+      const responseData = response;
+      console.log('响应数据:', responseData);
+      
+      // 检查是否包含期望的字段
+      if (responseData.code === 200 && responseData.data) {
+        console.log('登录成功，准备设置用户信息');
+        const { accessToken, userInfo } = responseData.data;
+        console.log('获取到的accessToken:', accessToken ? '存在' : '不存在');
+        console.log('获取到的userInfo:', userInfo);
+        
+        if (!accessToken || !userInfo) {
+          console.error('登录响应缺少必要字段:', { accessToken: !!accessToken, userInfo: !!userInfo });
+          return { success: false, error: '登录响应缺少必要字段' };
+        }
+        
+        setUserInfo(accessToken, userInfo);
+        console.log('用户信息已保存到store和localStorage');
+        return { success: true, data: responseData.data }
+      } else {
+        console.warn('登录失败，服务器返回:', responseData);
+        return { success: false, error: responseData.msg || '登录失败，请稍后再试' };
+      }
     } catch (error: any) {
+      console.error('登录请求发生异常:', error);
       return { 
         success: false, 
-        error: error.msg || '登录失败，请稍后再试' 
+        error: error.msg || error.message || '登录失败，请稍后再试' 
       }
     }
   }
@@ -61,19 +84,33 @@ export const useUserStore = defineStore('user', () => {
     password: string, 
     nickname?: string
   ) => {
+    console.log('开始注册请求...', { username, nickname });
     try {
       const response = await register({ username, password, nickname })
-      const responseData = response.data
+      console.log('注册API响应:', response);
       
-      if (responseData.code === 200) {
-        return { success: true }
+      // 检查响应结构
+      if (!response || typeof response !== 'object') {
+        console.error('服务器返回数据格式错误:', response);
+        return { success: false, error: '服务器返回数据格式错误' };
       }
       
-      return { success: false, error: responseData.msg }
+      const responseData = response;
+      console.log('注册响应数据:', responseData);
+      
+      // 对于注册，只需检查code是否为200即可，data可能为null
+      if (responseData.code === 200) {
+        console.log('注册成功');
+        return { success: true }
+      } else {
+        console.warn('注册失败，服务器返回:', responseData);
+        return { success: false, error: responseData.msg || '注册失败，请稍后再试' };
+      }
     } catch (error: any) {
+      console.error('注册请求发生异常:', error);
       return { 
         success: false, 
-        error: error.msg || '注册失败，请稍后再试' 
+        error: error.msg || error.message || '注册失败，请稍后再试' 
       }
     }
   }
