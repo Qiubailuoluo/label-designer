@@ -1,11 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import MainLayout from '@/components/layout/MainLayout.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
       path: '/',
-      redirect: '/login' // 默认跳转到登录页
+      redirect: '/dashboard'
     },
     {
       path: '/login',
@@ -18,10 +19,36 @@ const router = createRouter({
       component: () => import('@/views/login/Register.vue')
     },
     {
-      path: '/nothing',
-      name: 'Nothing',
-      component: () => import('@/views/nothing/Nothing.vue'),
-      meta: { requiresAuth: true } // 需要登录才能访问
+      path: '/',
+      component: MainLayout,
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: 'dashboard',
+          name: 'Dashboard',
+          component: () => import('@/views/dashboard/Dashboard.vue')
+        },
+        {
+          path: 'nothing',
+          name: 'Nothing',
+          component: () => import('@/views/nothing/Nothing.vue')
+        },
+        {
+          path: 'user-info',
+          name: 'UserInfo',
+          component: () => import('@/views/user-info/UserInfo.vue')
+        },
+        {
+          path: 'template-settings',
+          name: 'TemplateSettings',
+          component: () => import('@/views/template-settings/TemplateSettings.vue')
+        }
+      ]
+    },
+    // 404页面
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/dashboard'
     }
   ]
 })
@@ -33,6 +60,10 @@ router.beforeEach((to, from, next) => {
   // 如果访问需要登录的页面且没有token，跳转到登录页
   if (to.meta.requiresAuth && !token) {
     next('/login')
+  } 
+  // 如果已经登录，访问登录/注册页则跳转到首页
+  else if ((to.path === '/login' || to.path === '/register') && token) {
+    next('/dashboard')
   } else {
     next()
   }
