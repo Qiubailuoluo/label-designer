@@ -111,8 +111,10 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { useRouter } from 'vue-router'
 
 const userStore = useUserStore()
+const router = useRouter()
 
 // 模板数据
 interface TemplateItem {
@@ -178,17 +180,25 @@ const confirmCreate = () => {
   const now = new Date()
   const formattedTime = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
 
-  templates.value.unshift({
+  const newTemplateItem = {
     id: newId,
     name: newTemplate.name,
     updateTime: formattedTime,
     type: newTemplate.type,
     width: newTemplate.width,
     height: newTemplate.height
-  })
+  }
+
+  templates.value.unshift(newTemplateItem)
 
   showCreateDialog.value = false
-  // 这里可以调用API保存到后端
+  
+  // 使用 query 传递 id，避免 params 问题
+  router.push({ 
+    name: 'Designer',
+    query: { id: newId }, // 改用 query 传递 id
+    state: { template: newTemplateItem } // 保留模板信息
+  })
 }
 
 const editTemplate = (id: number) => {
