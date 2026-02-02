@@ -1,78 +1,107 @@
 <template>
   <div class="template-settings">
+    <!-- 页面标题和创建按钮 -->
     <div class="page-header">
-      <h1>模板设置</h1>
-      <p class="description">管理您的标签模板和预设</p>
+      <div class="header-content">
+        <h1>模板设置</h1>
+        <button class="create-template-btn" @click="createTemplate">
+          <span class="btn-icon">+</span> 创建模板
+        </button>
+      </div>
     </div>
 
-    <div class="settings-content">
-      <div class="settings-card">
-        <div class="card-header">
-          <h2>默认模板设置</h2>
-          <button class="create-btn">创建新模板</button>
-        </div>
-        
-        <div class="template-list">
-          <div class="template-item" v-for="i in 3" :key="i">
-            <div class="template-preview">
-              <div class="preview-placeholder">
-                <span>模板{{ i }}</span>
+    <!-- 模板列表表格 -->
+    <div class="template-table-container">
+      <table class="template-table">
+        <thead>
+          <tr>
+            <th>模板名称</th>
+            <th>更新时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="template in templates" :key="template.id">
+            <td class="template-name">
+              <div class="name-wrapper">
+                <span class="template-icon">🏷️</span>
+                {{ template.name }}
               </div>
-            </div>
-            <div class="template-info">
-              <h3>默认标签模板 {{ i }}</h3>
-              <p>尺寸：100mm × 50mm</p>
-              <div class="template-actions">
-                <button class="use-btn">使用</button>
-                <button class="edit-btn">编辑</button>
-                <button class="delete-btn">删除</button>
+            </td>
+            <td class="update-time">{{ template.updateTime }}</td>
+            <td class="actions">
+              <button class="action-btn edit-btn" @click="editTemplate(template.id)">
+                编辑
+              </button>
+              <button class="action-btn delete-btn" @click="deleteTemplate(template.id)">
+                删除
+              </button>
+            </td>
+          </tr>
+          <tr v-if="templates.length === 0">
+            <td colspan="3" class="empty-state">
+              <div class="empty-content">
+                <div class="empty-icon">📁</div>
+                <p>暂无模板，点击"创建模板"开始创建</p>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-      <div class="settings-card">
-        <div class="card-header">
-          <h2>系统设置</h2>
+    <!-- 创建模板对话框 -->
+    <div v-if="showCreateDialog" class="dialog-overlay" @click.self="closeDialog">
+      <div class="create-dialog">
+        <div class="dialog-header">
+          <h2>创建新模板</h2>
+          <button class="close-btn" @click="closeDialog">×</button>
         </div>
-        
-        <div class="settings-list">
-          <div class="setting-item">
-            <div class="setting-info">
-              <h3>自动保存</h3>
-              <p>每隔5分钟自动保存工作进度</p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" checked>
-              <span class="slider"></span>
-            </label>
+        <div class="dialog-body">
+          <div class="form-group">
+            <label for="templateName">模板名称</label>
+            <input
+              v-model="newTemplate.name"
+              type="text"
+              id="templateName"
+              placeholder="请输入模板名称"
+              @keyup.enter="confirmCreate"
+            />
           </div>
-          
-          <div class="setting-item">
-            <div class="setting-info">
-              <h3>默认导出格式</h3>
-              <p>选择标签导出的默认文件格式</p>
-            </div>
-            <select class="format-select">
-              <option value="png">PNG图片</option>
-              <option value="pdf">PDF文档</option>
-              <option value="svg">SVG矢量图</option>
+          <div class="form-group">
+            <label for="templateType">模板类型</label>
+            <select v-model="newTemplate.type" id="templateType">
+              <option value="rfid">RFID标签</option>
+              <option value="normal">普通标签</option>
+              <option value="barcode">条形码标签</option>
             </select>
           </div>
-          
-          <div class="setting-item">
-            <div class="setting-info">
-              <h3>默认标签尺寸</h3>
-              <p>新建标签时的默认尺寸</p>
-            </div>
-            <div class="size-inputs">
-              <input type="number" class="size-input" placeholder="宽" value="100">
-              <span>×</span>
-              <input type="number" class="size-input" placeholder="高" value="50">
-              <span class="unit">mm</span>
-            </div>
+          <div class="form-group">
+            <label for="templateWidth">宽度 (mm)</label>
+            <input
+              v-model.number="newTemplate.width"
+              type="number"
+              id="templateWidth"
+              placeholder="100"
+              min="10"
+              max="500"
+            />
           </div>
+          <div class="form-group">
+            <label for="templateHeight">高度 (mm)</label>
+            <input
+              v-model.number="newTemplate.height"
+              type="number"
+              id="templateHeight"
+              placeholder="50"
+              min="10"
+              max="500"
+            />
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="cancel-btn" @click="closeDialog">取消</button>
+          <button class="confirm-btn" @click="confirmCreate">创建</button>
         </div>
       </div>
     </div>
@@ -80,7 +109,104 @@
 </template>
 
 <script setup lang="ts">
-// 暂时不需要特殊的逻辑
+import { ref, reactive } from 'vue'
+import { useUserStore } from '@/stores/user'
+
+const userStore = useUserStore()
+
+// 模板数据
+interface TemplateItem {
+  id: number
+  name: string
+  updateTime: string
+  type?: string
+  width?: number
+  height?: number
+}
+
+const templates = ref<TemplateItem[]>([
+  {
+    id: 1,
+    name: 'RFID标签模板1',
+    updateTime: '2026-02-01 10:30',
+    type: 'rfid',
+    width: 100,
+    height: 50
+  },
+  {
+    id: 2,
+    name: 'RFID标签模板2',
+    updateTime: '2026-02-02 14:15',
+    type: 'rfid',
+    width: 80,
+    height: 40
+  }
+])
+
+// 创建模板相关
+const showCreateDialog = ref(false)
+const newTemplate = reactive({
+  name: '',
+  type: 'rfid',
+  width: 100,
+  height: 50
+})
+
+const createTemplate = () => {
+  // 重置表单
+  newTemplate.name = ''
+  newTemplate.type = 'rfid'
+  newTemplate.width = 100
+  newTemplate.height = 50
+  showCreateDialog.value = true
+}
+
+const closeDialog = () => {
+  showCreateDialog.value = false
+}
+
+const confirmCreate = () => {
+  if (!newTemplate.name.trim()) {
+    alert('请输入模板名称')
+    return
+  }
+
+  const newId = templates.value.length > 0 
+    ? Math.max(...templates.value.map(t => t.id)) + 1 
+    : 1
+
+  const now = new Date()
+  const formattedTime = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+
+  templates.value.unshift({
+    id: newId,
+    name: newTemplate.name,
+    updateTime: formattedTime,
+    type: newTemplate.type,
+    width: newTemplate.width,
+    height: newTemplate.height
+  })
+
+  showCreateDialog.value = false
+  // 这里可以调用API保存到后端
+}
+
+const editTemplate = (id: number) => {
+  const template = templates.value.find(t => t.id === id)
+  if (template) {
+    alert(`编辑模板: ${template.name}`)
+    // 实际项目中这里应该打开编辑对话框
+  }
+}
+
+const deleteTemplate = (id: number) => {
+  if (confirm('确定要删除这个模板吗？')) {
+    const index = templates.value.findIndex(t => t.id === id)
+    if (index !== -1) {
+      templates.value.splice(index, 1)
+    }
+  }
+}
 </script>
 
 <style scoped>
