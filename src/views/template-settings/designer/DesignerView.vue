@@ -4,8 +4,11 @@
     <DesignerToolbar
       :config="canvasConfig"
       :template-name="templateName"
+      :template-description="templateDescription"
+      :is-saving="isSaving"
       @config-update="handleConfigUpdate"
       @name-change="handleNameChange"
+      @description-change="handleDescriptionChange"
       @save="handleSave"
       @back="handleBack"
     />
@@ -45,18 +48,22 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 import DesignerToolbar from './components/Toolbar.vue'
 import ElementsPanel from './components/ElementsPanel.vue'
 import Canvas from './components/Canvas.vue'
 import PropertiesPanel from './components/PropertiesPanel.vue'
+import { saveDesign, getDesign } from './api/designer-api'
 import type { CanvasConfig, DesignElement, ElementType } from './types'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 // 获取模板ID和名称
 const templateId = computed(() => route.params.id as string || '')
 const templateName = ref('新标签设计')
+const templateDescription = ref('')
 
 // 画布配置
 const canvasConfig = ref<CanvasConfig>({
@@ -75,6 +82,10 @@ const selectedElement = ref<DesignElement | null>(null)
 
 // 画布引用
 const canvasRef = ref<InstanceType<typeof Canvas> | null>(null)
+
+  // 加载状态
+const isLoading = ref(false)
+const isSaving = ref(false)
 
 // 处理配置更新
 const handleConfigUpdate = (config: Partial<CanvasConfig>) => {
@@ -160,37 +171,56 @@ const handleElementDelete = (elementId: string) => {
 
 // 保存设计
 const handleSave = async () => {
+  if (!userStore.isLoggedIn) {
+    alert('请先登录')
+    router.push('/login')
+    return
+  }
+  
+  if (!templateName.value.trim()) {
+    alert('请输入模板名称')
+    return
+  }
+  
   try {
-    // 准备设计数据
+    isSaving.value = true
+    
     const designData = {
-      id: templateId.value,
+      id: templateId.value || undefined,
       name: templateName.value,
+      description: templateDescription.value || '',
+      userId: userStore.userInfo?.username || '',
       canvasConfig: canvasConfig.value,
       elements: elements.value,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      tags: ['RFID', '标签'],
+      status: 'draft' as const,
+      isPublic: false
     }
     
-    // 保存到localStorage（模拟后端API）
-    const designs = JSON.parse(localStorage.getItem('rfidDesigns') || '[]')
-    const existingIndex = designs.findIndex((d: any) => d.id === designData.id)
+    const response = await saveDesign(designData)
     
-    if (existingIndex !== -1) {
-      designs[existingIndex] = designData
+    if (response.code === 200 && response.data) {
+      // 保存成功
+      alert('保存成功！')
+      
+      // 如果是从模板列表跳转过来的，更新URL中的ID
+      if (!templateId.value && response.data.id) {
+        router.replace({
+          name: 'TemplateDesign',
+          params: { id: response.data.id }
+        })
+      }
+      
+      // 返回模板设置页面
+      router.push('/template-settings')
     } else {
-      designs.push(designData)
+      alert(`保存失败: ${response.msg}`)
     }
-    
-    localStorage.setItem('rfidDesigns', JSON.stringify(designs))
-    
-    // 保存成功提示
-    alert('保存成功！')
-    
-    // 返回模板设置页面
-    handleBack()
-  } catch (error) {
+  } catch (error: any) {
     console.error('保存失败:', error)
-    alert('保存失败，请重试')
+    alert(`保存失败: ${error.msg || '请稍后重试'}`)
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -204,29 +234,60 @@ const handleBack = () => {
   router.push('/template-settings')
 }
 
+// 添加description修改方法
+const handleDescriptionChange = (newDescription: string) => {
+  templateDescription.value = newDescription
+}
+
 // 加载模板数据
-const loadTemplateData = () => {
-  if (!templateId.value) return
+const loadTemplateData = async () => {
+  if (!templateId.value) {
+    // 创建新模板
+    templateName.value = '新标签设计'
+    templateDescription.value = ''
+    canvasConfig.value = {
+      width: 100,
+      height: 60,
+      dpi: 300,
+      backgroundColor: '#ffffff',
+      gridEnabled: true
+    }
+    elements.value = []
+    return
+  }
   
   try {
-    const designs = JSON.parse(localStorage.getItem('rfidDesigns') || '[]')
-    const template = designs.find((d: any) => d.id === templateId.value)
+    isLoading.value = true
     
-    if (template) {
-      // 加载模板数据
-      templateName.value = template.name || '新标签设计'
-      canvasConfig.value = {
-        ...canvasConfig.value,
-        ...template.canvasConfig
-      }
-      elements.value = template.elements || []
+    const response = await getDesign(templateId.value)
+    
+    if (response.code === 200 && response.data) {
+      const design = response.data
       
-      console.log('加载模板数据成功:', template)
+      // 检查权限
+      if (design.userId !== userStore.userInfo?.username && !design.isPublic) {
+        alert('您没有权限查看此模板')
+        router.push('/template-settings')
+        return
+      }
+      
+      // 加载模板数据
+      templateName.value = design.name
+      templateDescription.value = design.description || ''
+      canvasConfig.value = design.canvasConfig
+      elements.value = design.elements || []
+      
+      console.log('加载模板数据成功:', design)
     } else {
-      console.log('未找到模板数据，创建新模板')
+      alert(`加载失败: ${response.msg}`)
+      router.push('/template-settings')
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('加载模板数据失败:', error)
+    alert(`加载失败: ${error.msg || '请稍后重试'}`)
+    router.push('/template-settings')
+  } finally {
+    isLoading.value = false
   }
 }
 

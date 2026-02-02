@@ -13,7 +13,16 @@
           type="text"
           class="template-name"
           placeholder="输入模板名称"
+          :disabled="isSaving"
           @change="handleNameChange"
+        />
+         <input
+          v-model="localDescription"
+          type="text"
+          class="template-description"
+          placeholder="模板描述（可选）"
+          :disabled="isSaving"
+          @change="handleDescriptionChange"
         />
       </div>
     </div>
@@ -61,9 +70,10 @@
     
     <!-- 右侧：操作按钮 -->
     <div class="toolbar-right">
-      <button class="action-btn save-btn" @click="handleSave">
-        <span class="icon">💾</span>
-        <span class="text">保存</span>
+      <button class="action-btn save-btn" @click="handleSave" :disabled="isSaving">
+         <span v-if="isSaving" class="icon">⏳</span>
+         <span v-else class="icon">💾</span>
+        <span class="text">{{ isSaving ? '保存中...' : '保存' }}</span>
       </button>
     </div>
   </div>
@@ -76,6 +86,8 @@ import type { CanvasConfig } from '../types'
 interface Props {
   config: CanvasConfig
   templateName: string
+  templateDescription?: string
+  isSaving?: boolean
 }
 
 interface Emits {
@@ -83,9 +95,13 @@ interface Emits {
   (e: 'save'): void
   (e: 'back'): void
   (e: 'name-change', name: string): void
+  (e: 'description-change', description: string): void
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  templateDescription: '',
+  isSaving: false
+})
 const emit = defineEmits<Emits>()
 
 // 本地配置副本
@@ -99,6 +115,19 @@ const localConfig = ref({
 
 // 本地名称副本
 const localName = ref(props.templateName)
+
+// 本地描述副本
+const localDescription = ref(props.templateDescription)
+
+// 监听描述变化
+watch(() => props.templateDescription, (newDescription) => {
+  localDescription.value = newDescription
+}, { immediate: true })
+
+// 描述变化
+const handleDescriptionChange = () => {
+  emit('description-change', localDescription.value)
+}
 
 // 监听父组件配置变化
 watch(() => props.config, (newConfig) => {
