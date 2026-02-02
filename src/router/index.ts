@@ -42,6 +42,24 @@ const router = createRouter({
           path: 'template-settings',
           name: 'TemplateSettings',
           component: () => import('@/views/template-settings/TemplateSettings.vue')
+        },
+        {
+          path: '/template-settings/designer',
+          name: 'Designer',
+          component: () => import('@/views/template-settings/designer/Designer.vue'),
+          meta: { 
+            requiresAuth: true,
+            title: '标签设计器'
+          }
+        },
+        {
+          path: '/template-settings/designer/:id',
+          name: 'DesignerEdit',
+          component: () => import('@/views/template-settings/designer/Designer.vue'),
+          meta: { 
+            requiresAuth: true,
+            title: '编辑标签设计'
+          }
         }
       ]
     },

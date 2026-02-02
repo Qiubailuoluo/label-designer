@@ -1,0 +1,175 @@
+.canvas-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.grid-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.main-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  cursor: crosshair;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.selection-box {
+  position: absolute;
+  border: 2px solid #2196f3;
+  pointer-events: none;
+  z-index: 3;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    border: 1px dashed rgba(33, 150, 243, 0.5);
+    pointer-events: none;
+  }
+}
+
+.control-point {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background-color: white;
+  border: 2px solid #2196f3;
+  border-radius: 50%;
+  pointer-events: all;
+  cursor: grab;
+  
+  &:hover {
+    background-color: #2196f3;
+  }
+  
+  &.control-point-nw {
+    cursor: nw-resize;
+  }
+  &.control-point-n {
+    cursor: n-resize;
+  }
+  &.control-point-ne {
+    cursor: ne-resize;
+  }
+  &.control-point-e {
+    cursor: e-resize;
+  }
+  &.control-point-se {
+    cursor: se-resize;
+  }
+  &.control-point-s {
+    cursor: s-resize;
+  }
+  &.control-point-sw {
+    cursor: sw-resize;
+  }
+  &.control-point-w {
+    cursor: w-resize;
+  }
+}
+
+.rotate-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background-color: white;
+  border: 2px solid #ff9800;
+  border-radius: 50%;
+  pointer-events: all;
+  cursor: grab;
+  
+  &:hover {
+    background-color: #ff9800;
+  }
+}
+
+.rulers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 1;
+  
+  .ruler-horizontal {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 20px;
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #ccc;
+  }
+  
+  .ruler-vertical {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 20px;
+    background-color: #f0f0f0;
+    border-right: 1px solid #ccc;
+  }
+  
+  .ruler-tick {
+    position: absolute;
+    
+    .tick-label {
+      font-size: 10px;
+      color: #666;
+      user-select: none;
+    }
+  }
+}
+
+.zoom-controls {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  
+  button {
+    width: 24px;
+    height: 24px;
+    border: 1px solid #ddd;
+    background-color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    &:hover {
+      background-color: #f5f5f5;
+    }
+  }
+  
+  span {
+    font-size: 12px;
+    min-width: 40px;
+    text-align: center;
+  }
+}
