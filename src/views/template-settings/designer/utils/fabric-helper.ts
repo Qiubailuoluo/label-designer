@@ -4,7 +4,6 @@ import { ElementType } from '../types'
 
 // 毫米转像素
 export const mmToPx = (mm: number, dpi: number = 300): number => {
-  // 1英寸 = 25.4毫米, DPI = 每英寸像素数
   return (mm / 25.4) * dpi
 }
 
@@ -15,7 +14,7 @@ export const pxToMm = (px: number, dpi: number = 300): number => {
 
 // 创建文本元素
 export const createTextElement = (config: any): fabric.Text => {
-  return new fabric.Text(config.content || '文本', {
+  const text = new fabric.Text(config.content || '文本', {
     left: mmToPx(config.x || 0),
     top: mmToPx(config.y || 0),
     fontSize: config.fontSize || 12,
@@ -28,13 +27,28 @@ export const createTextElement = (config: any): fabric.Text => {
     hasControls: true,
     hasBorders: true,
     originX: 'left',
-    originY: 'top'
+    originY: 'top',
+    lockUniScaling: false, // 允许自由缩放
+    lockScalingFlip: true, // 禁止翻转
+    lockMovementX: false,
+    lockMovementY: false,
+    lockRotation: false,
+    cornerStyle: 'circle',
+    cornerColor: '#2196f3',
+    cornerSize: 8,
+    transparentCorners: false
   })
+
+  // 存储元素ID
+  text.set('elementId', config.id)
+  text.set('type', ElementType.TEXT)
+
+  return text
 }
 
 // 创建矩形元素
 export const createRectElement = (config: any): fabric.Rect => {
-  return new fabric.Rect({
+  const rect = new fabric.Rect({
     left: mmToPx(config.x || 0),
     top: mmToPx(config.y || 0),
     width: mmToPx(config.width || 50),
@@ -48,18 +62,39 @@ export const createRectElement = (config: any): fabric.Rect => {
     hasControls: true,
     hasBorders: true,
     originX: 'left',
-    originY: 'top'
+    originY: 'top',
+    lockScalingY: false, // 允许垂直缩放
+    lockScalingX: false, // 允许水平缩放
+    lockScalingFlip: true, // 禁止翻转
+    lockMovementX: false,
+    lockMovementY: false,
+    lockRotation: false,
+    cornerStyle: 'circle',
+    cornerColor: '#2196f3',
+    cornerSize: 8,
+    transparentCorners: false
   })
+
+  rect.set('elementId', config.id)
+  rect.set('type', ElementType.RECTANGLE)
+
+  return rect
 }
 
 // 创建RFID元素（组）
 export const createRfidElement = (config: any): fabric.Group => {
-  const text = new fabric.Text(config.tid || 'TID: 387656779876543212345678', {
+  const textContent = config.showLabel 
+    ? `${config.label || 'TID:'} ${config.tid || '387656779876543212345678'}`
+    : config.tid || '387656779876543212345678'
+  
+  const text = new fabric.Text(textContent, {
     left: 10,
     top: 10,
     fontSize: 12,
     fill: config.textColor || '#000000',
-    fontFamily: 'Arial'
+    fontFamily: 'Arial',
+    originX: 'left',
+    originY: 'top'
   })
   
   const background = new fabric.Rect({
@@ -67,23 +102,39 @@ export const createRfidElement = (config: any): fabric.Group => {
     height: text.height! + 20,
     fill: config.bgColor || '#f0f0f0',
     stroke: '#cccccc',
-    strokeWidth: 1
+    strokeWidth: 1,
+    originX: 'left',
+    originY: 'top'
   })
   
-  return new fabric.Group([background, text], {
+  const group = new fabric.Group([background, text], {
     left: mmToPx(config.x || 0),
     top: mmToPx(config.y || 0),
     selectable: true,
     hasControls: true,
     hasBorders: true,
     originX: 'left',
-    originY: 'top'
+    originY: 'top',
+    lockScalingY: false, // 允许垂直缩放
+    lockScalingX: false, // 允许水平缩放
+    lockScalingFlip: true,
+    lockMovementX: false,
+    lockMovementY: false,
+    lockRotation: false,
+    cornerStyle: 'circle',
+    cornerColor: '#2196f3',
+    cornerSize: 8,
+    transparentCorners: false
   })
+  
+  group.set('elementId', config.id)
+  group.set('type', ElementType.RFID)
+  
+  return group
 }
 
 // 根据元素类型创建fabric对象
 export const createFabricObject = (element: DesignElement, dpi: number = 300): fabric.Object => {
-  // 将dpi添加到element配置中
   const elementWithDpi = { ...element, dpi };
   
   switch (element.type) {
@@ -94,7 +145,155 @@ export const createFabricObject = (element: DesignElement, dpi: number = 300): f
     case ElementType.RFID:
       return createRfidElement(elementWithDpi)
     default:
-      // 处理其他类型如IMAGE、BARCODE等或作为文本元素处理
       return createTextElement(elementWithDpi)
   }
+}
+
+// 更新fabric对象的属性（不重新创建对象）
+export const updateFabricObject = (obj: fabric.Object, element: DesignElement, dpi: number = 300) => {
+  // 基础属性
+  obj.set({
+    left: mmToPx(element.x, dpi),
+    top: mmToPx(element.y, dpi),
+    angle: element.rotation || 0,
+    opacity: element.opacity || 1,
+    visible: element.visible !== false
+  })
+  
+  // 根据类型更新特定属性
+  switch (element.type) {
+    case ElementType.TEXT:
+      if (obj instanceof fabric.Text) {
+        const textElement = element as any
+        obj.set({
+          text: textElement.content || '文本',
+          fontSize: textElement.fontSize || 12,
+          fill: textElement.color || '#000000',
+          fontFamily: textElement.fontFamily || 'Arial',
+          textAlign: textElement.textAlign || 'left',
+          fontWeight: textElement.bold ? 'bold' : 'normal',
+          fontStyle: textElement.italic ? 'italic' : 'normal'
+        })
+      }
+      break
+      
+    case ElementType.RECTANGLE:
+      if (obj instanceof fabric.Rect) {
+        const rectElement = element as any
+        obj.set({
+          width: mmToPx(element.width, dpi),
+          height: mmToPx(element.height, dpi),
+          fill: rectElement.fill || '#ffffff',
+          stroke: rectElement.stroke || '#000000',
+          strokeWidth: rectElement.strokeWidth || 1,
+          rx: rectElement.cornerRadius || 0,
+          ry: rectElement.cornerRadius || 0
+        })
+      }
+      break
+      
+    case ElementType.RFID:
+      if (obj instanceof fabric.Group) {
+        const rfidElement = element as any
+        const background = (obj as fabric.Group).item(0) as fabric.Rect
+        const text = (obj as fabric.Group).item(1) as fabric.Text
+        
+        if (background && text) {
+          const textContent = rfidElement.showLabel 
+            ? `${rfidElement.label || 'TID:'} ${rfidElement.tid || '387656779876543212345678'}`
+            : rfidElement.tid || '387656779876543212345678'
+          
+          text.set({
+            text: textContent,
+            fill: rfidElement.textColor || '#000000'
+          })
+          
+          background.set({
+            fill: rfidElement.bgColor || '#f0f0f0',
+            width: text.width! + 20,
+            height: text.height! + 20
+          })
+          
+          // 更新组尺寸
+          obj.set({
+            width: text.width! + 20,
+            height: text.height! + 20
+          })
+        }
+      }
+      break
+  }
+  
+  // 设置缩放为1，确保宽度/高度是实际值
+  obj.set({
+    scaleX: 1,
+    scaleY: 1,
+    width: mmToPx(element.width, dpi),
+    height: mmToPx(element.height, dpi)
+  })
+  
+  // 更新控制点和坐标
+  obj.setCoords()
+}
+
+// 从fabric对象获取元素数据
+export const getElementFromFabricObject = (obj: fabric.Object, dpi: number = 300): Partial<DesignElement> => {
+  const elementId = obj.get('elementId')
+  if (!elementId) return {}
+  
+  // 获取基本变换信息
+  const left = obj.left || 0
+  const top = obj.top || 0
+  const width = obj.width || 0
+  const height = obj.height || 0
+  const scaleX = obj.scaleX || 1
+  const scaleY = obj.scaleY || 1
+  const actualWidth = width * scaleX
+  const actualHeight = height * scaleY
+  
+  const updates: Partial<DesignElement> = {
+    id: elementId,
+    x: pxToMm(left, dpi),
+    y: pxToMm(top, dpi),
+    width: pxToMm(actualWidth, dpi),
+    height: pxToMm(actualHeight, dpi),
+    rotation: obj.angle || 0,
+    opacity: obj.opacity || 1,
+    visible: obj.visible !== false
+  }
+  
+  // 根据类型获取特定属性
+  const type = obj.get('type')
+  switch (type) {
+    case ElementType.TEXT:
+      if (obj instanceof fabric.Text) {
+        Object.assign(updates, {
+          content: obj.text,
+          fontSize: obj.fontSize,
+          color: obj.fill,
+          fontFamily: obj.fontFamily,
+          textAlign: obj.textAlign,
+          bold: obj.fontWeight === 'bold',
+          italic: obj.fontStyle === 'italic'
+        })
+      }
+      break
+      
+    case ElementType.RECTANGLE:
+      if (obj instanceof fabric.Rect) {
+        Object.assign(updates, {
+          fill: obj.fill,
+          stroke: obj.stroke,
+          strokeWidth: obj.strokeWidth,
+          cornerRadius: obj.rx || 0
+        })
+      }
+      break
+      
+    case ElementType.RFID:
+      // RFID元素是组，需要通过group获取
+      break
+  }
+  
+  return updates
 }

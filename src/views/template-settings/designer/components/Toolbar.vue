@@ -55,25 +55,7 @@
           </select>
         </div>
         
-        <div class="control-item">
-          <label>背景色</label>
-          <input
-            v-model="localConfig.backgroundColor"
-            type="color"
-            @change="updateConfig"
-          />
-        </div>
         
-        <div class="control-item">
-          <label class="checkbox-label">
-            <input
-              v-model="localConfig.gridEnabled"
-              type="checkbox"
-              @change="updateConfig"
-            />
-            网格
-          </label>
-        </div>
       </div>
     </div>
     

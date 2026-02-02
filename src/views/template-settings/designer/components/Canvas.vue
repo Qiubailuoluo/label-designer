@@ -7,10 +7,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as fabric from 'fabric'
 import type { CanvasConfig, DesignElement } from '../types'
-import { mmToPx, createFabricObject } from '../utils/fabric-helper'
+import { 
+  mmToPx, 
+  createFabricObject, 
+  updateFabricObject, 
+  getElementFromFabricObject 
+} from '../utils/fabric-helper'
 
 interface Props {
   config: CanvasConfig
@@ -33,6 +38,12 @@ let fabricCanvas: fabric.Canvas | null = null
 // 当前选中的元素ID
 let selectedElementId: string | null = null
 
+// 元素ID到fabric对象的映射
+const elementMap = new Map<string, fabric.Object>()
+
+// 是否正在通过程序更新（避免循环更新）
+let isProgrammaticUpdate = false
+
 // 初始化画布
 const initCanvas = () => {
   if (!canvasRef.value || !containerRef.value) return
@@ -46,8 +57,11 @@ const initCanvas = () => {
     width,
     height,
     backgroundColor: props.config.backgroundColor,
-    selection: false, // 禁用fabric默认的选择框
-    preserveObjectStacking: true
+    selection: true, // 启用选择
+    preserveObjectStacking: true,
+    renderOnAddRemove: true,
+    stopContextMenu: true,
+    fireRightClick: true
   })
   
   // 设置容器尺寸
@@ -64,6 +78,12 @@ const initCanvas = () => {
   // 监听对象修改事件
   fabricCanvas.on('object:modified', handleObjectModified)
   
+  // 监听鼠标移动（用于显示坐标）
+  fabricCanvas.on('mouse:move', handleMouseMove)
+  
+  // 监听鼠标按下（用于点击空白处取消选择）
+  fabricCanvas.on('mouse:down', handleMouseDown)
+  
   // 渲染所有元素
   renderAllElements()
 }
@@ -72,7 +92,7 @@ const initCanvas = () => {
 const handleSelectionCreated = (e: any) => {
   if (e.selected && e.selected[0]) {
     const object = e.selected[0]
-    selectedElementId = object.data?.id || null
+    selectedElementId = object.get('elementId') || null
     emit('element-select', selectedElementId)
   }
 }
@@ -80,7 +100,7 @@ const handleSelectionCreated = (e: any) => {
 const handleSelectionUpdated = (e: any) => {
   if (e.selected && e.selected[0]) {
     const object = e.selected[0]
-    selectedElementId = object.data?.id || null
+    selectedElementId = object.get('elementId') || null
     emit('element-select', selectedElementId)
   }
 }
@@ -90,33 +110,34 @@ const handleSelectionCleared = () => {
   emit('element-select', null)
 }
 
+// 处理鼠标移动
+const handleMouseMove = (e: any) => {
+  // 可以在这里显示鼠标坐标
+  // console.log('Mouse at:', e.pointer.x, e.pointer.y)
+}
+
+// 处理鼠标按下
+const handleMouseDown = (e: any) => {
+  // 如果点击在空白处，清除选择
+  if (!e.target && fabricCanvas) {
+    fabricCanvas.discardActiveObject()
+    fabricCanvas.requestRenderAll()
+  }
+}
+
 // 处理对象修改（位置、大小、旋转等变化）
 const handleObjectModified = (e: any) => {
   const object = e.target
-  if (!object || !object.data?.id) return
+  if (!object || !object.get('elementId') || isProgrammaticUpdate) return
   
-  const updates: Partial<DesignElement> = {}
+  const elementId = object.get('elementId')
   
-  // 更新位置
-  if (object.left !== undefined && object.top !== undefined) {
-    updates.x = object.left / (props.config.dpi / 25.4)
-    updates.y = object.top / (props.config.dpi / 25.4)
-  }
-  
-  // 更新尺寸
-  if (object.width && object.scaleX && object.height && object.scaleY) {
-    updates.width = (object.width * object.scaleX) / (props.config.dpi / 25.4)
-    updates.height = (object.height * object.scaleY) / (props.config.dpi / 25.4)
-  }
-  
-  // 更新旋转
-  if (object.angle !== undefined) {
-    updates.rotation = object.angle
-  }
+  // 从fabric对象获取更新后的数据
+  const updates = getElementFromFabricObject(object, props.config.dpi)
   
   // 发送更新事件
   if (Object.keys(updates).length > 0) {
-    emit('element-update', object.data.id, updates)
+    emit('element-update', elementId, updates)
   }
 }
 
@@ -124,6 +145,10 @@ const handleObjectModified = (e: any) => {
 const renderAllElements = () => {
   if (!fabricCanvas) return
   
+  // 清空映射
+  elementMap.clear()
+  
+  // 清空画布
   fabricCanvas.clear()
   
   // 按zIndex排序渲染
@@ -142,48 +167,54 @@ const addElementToCanvas = (element: DesignElement) => {
   
   const fabricObject = createFabricObject(element, props.config.dpi)
   
-  // 存储元素ID
-  fabricObject.set('data', { id: element.id })
-  
-  // 设置旋转
-  if (element.rotation) {
-    fabricObject.set('angle', element.rotation)
-  }
-  
-  // 设置透明度
-  if (element.opacity !== undefined) {
-    fabricObject.set('opacity', element.opacity)
-  }
+  // 存储到映射
+  elementMap.set(element.id, fabricObject)
   
   fabricCanvas.add(fabricObject)
+  fabricCanvas.renderAll()
 }
 
-// 更新元素
+// 更新画布上的元素（不重新创建）
 const updateElementOnCanvas = (element: DesignElement) => {
   if (!fabricCanvas) return
   
-  const objects = fabricCanvas.getObjects()
-  const existingObject = objects.find((obj: fabric.Object) => (obj as any).data?.id === element.id)
+  // 标记为程序更新，避免触发object:modified事件循环
+  isProgrammaticUpdate = true
+  
+  const existingObject = elementMap.get(element.id)
   
   if (existingObject) {
-    // 移除旧对象
-    fabricCanvas.remove(existingObject)
+    // 更新现有对象
+    updateFabricObject(existingObject, element, props.config.dpi)
+    
+    // 如果这个元素当前被选中，保持选中状态
+    const activeObject = fabricCanvas.getActiveObject()
+    if (activeObject && activeObject.get('elementId') === element.id) {
+      // 重新设置活动对象，触发重新渲染
+      fabricCanvas.setActiveObject(existingObject)
+    }
+    
+    fabricCanvas.requestRenderAll()
+  } else {
+    // 如果不存在，添加新对象
+    addElementToCanvas(element)
   }
   
-  // 添加新对象
-  addElementToCanvas(element)
-  fabricCanvas.renderAll()
+  // 重置标记
+  setTimeout(() => {
+    isProgrammaticUpdate = false
+  }, 10)
 }
 
 // 移除元素
 const removeElementFromCanvas = (elementId: string) => {
   if (!fabricCanvas) return
   
-  const objects = fabricCanvas.getObjects()
-  const objectToRemove = objects.find((obj: fabric.Object) => (obj as any).data?.id === elementId)
+  const objectToRemove = elementMap.get(elementId)
   
   if (objectToRemove) {
     fabricCanvas.remove(objectToRemove)
+    elementMap.delete(elementId)
     fabricCanvas.renderAll()
   }
 }
@@ -191,6 +222,9 @@ const removeElementFromCanvas = (elementId: string) => {
 // 更新画布配置
 const updateConfig = (config: CanvasConfig) => {
   if (!fabricCanvas || !containerRef.value) return
+  
+  // 标记为程序更新
+  isProgrammaticUpdate = true
   
   // 更新画布尺寸
   const width = mmToPx(config.width, config.dpi)
@@ -205,10 +239,23 @@ const updateConfig = (config: CanvasConfig) => {
   }
   
   // 更新背景色
-  fabricCanvas.backgroundColor = config.backgroundColor;
-  fabricCanvas.renderAll();
-  // 重新渲染所有元素
-  renderAllElements()
+  fabricCanvas.backgroundColor = config.backgroundColor
+  fabricCanvas.renderAll()
+  
+  // 重新计算所有元素位置（因为DPI可能变化）
+  elementMap.forEach((obj, elementId) => {
+    const element = props.elements.find(e => e.id === elementId)
+    if (element) {
+      updateFabricObject(obj, element, config.dpi)
+    }
+  })
+  
+  fabricCanvas.renderAll()
+  
+  // 重置标记
+  setTimeout(() => {
+    isProgrammaticUpdate = false
+  }, 10)
 }
 
 // 添加元素（供父组件调用）
@@ -227,8 +274,27 @@ const removeElement = (elementId: string) => {
 }
 
 // 监听元素变化
-watch(() => props.elements, () => {
-  renderAllElements()
+watch(() => props.elements, (newElements, oldElements) => {
+  // 比较新旧元素，找出需要添加、更新、删除的元素
+  const newIds = new Set(newElements.map(e => e.id))
+  const oldIds = new Set(oldElements.map(e => e.id))
+  
+  // 找出需要删除的元素
+  const toRemove = [...oldIds].filter(id => !newIds.has(id))
+  toRemove.forEach(id => {
+    removeElementFromCanvas(id)
+  })
+  
+  // 找出需要添加或更新的元素
+  newElements.forEach(element => {
+    if (oldIds.has(element.id)) {
+      // 更新现有元素
+      updateElementOnCanvas(element)
+    } else {
+      // 添加新元素
+      addElementToCanvas(element)
+    }
+  })
 }, { deep: true })
 
 // 监听配置变化
@@ -238,7 +304,9 @@ watch(() => props.config, (newConfig) => {
 
 // 生命周期
 onMounted(() => {
-  initCanvas()
+  nextTick(() => {
+    initCanvas()
+  })
 })
 
 onUnmounted(() => {
@@ -257,8 +325,6 @@ defineExpose({
 </script>
 
 <style scoped>
-@import '../css/canvas.scss';
-
 .canvas-wrapper {
   width: 100%;
   height: 100%;
@@ -268,6 +334,7 @@ defineExpose({
   background-color: #f0f0f0;
   border-radius: 4px;
   overflow: auto;
+  position: relative;
 }
 
 .canvas-container {
@@ -278,5 +345,6 @@ defineExpose({
 
 .main-canvas {
   display: block;
+  cursor: default;
 }
 </style>
