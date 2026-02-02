@@ -28,7 +28,7 @@
                 {{ template.name }}
               </div>
             </td>
-            <td class="update-time">{{ template.updateTime }}</td>
+            <td class="update-time">{{ formatDate(template.updatedAt) }}</td>
             <td class="actions">
               <button class="action-btn edit-btn" @click="editTemplate(template.id)">
                 编辑
@@ -49,164 +49,114 @@
         </tbody>
       </table>
     </div>
-
-    <!-- 创建模板对话框 -->
-    <div v-if="showCreateDialog" class="dialog-overlay" @click.self="closeDialog">
-      <div class="create-dialog">
-        <div class="dialog-header">
-          <h2>创建新模板</h2>
-          <button class="close-btn" @click="closeDialog">×</button>
-        </div>
-        <div class="dialog-body">
-          <div class="form-group">
-            <label for="templateName">模板名称</label>
-            <input
-              v-model="newTemplate.name"
-              type="text"
-              id="templateName"
-              placeholder="请输入模板名称"
-              @keyup.enter="confirmCreate"
-            />
-          </div>
-          <div class="form-group">
-            <label for="templateType">模板类型</label>
-            <select v-model="newTemplate.type" id="templateType">
-              <option value="rfid">RFID标签</option>
-              <option value="normal">普通标签</option>
-              <option value="barcode">条形码标签</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="templateWidth">宽度 (mm)</label>
-            <input
-              v-model.number="newTemplate.width"
-              type="number"
-              id="templateWidth"
-              placeholder="100"
-              min="10"
-              max="500"
-            />
-          </div>
-          <div class="form-group">
-            <label for="templateHeight">高度 (mm)</label>
-            <input
-              v-model.number="newTemplate.height"
-              type="number"
-              id="templateHeight"
-              placeholder="50"
-              min="10"
-              max="500"
-            />
-          </div>
-        </div>
-        <div class="dialog-footer">
-          <button class="cancel-btn" @click="closeDialog">取消</button>
-          <button class="confirm-btn" @click="confirmCreate">创建</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { useUserStore } from '@/stores/user'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 
-const userStore = useUserStore()
+const router = useRouter()
 
-// 模板数据
 interface TemplateItem {
-  id: number
+  id: string
   name: string
-  updateTime: string
-  type?: string
-  width?: number
-  height?: number
+  updatedAt: string
+  createdAt: string
+  elements: any[]
+  canvasConfig: any
 }
 
 const templates = ref<TemplateItem[]>([
+  // 示例数据
   {
-    id: 1,
+    id: 'template_1',
     name: 'RFID标签模板1',
-    updateTime: '2026-02-01 10:30',
-    type: 'rfid',
-    width: 100,
-    height: 50
+    updatedAt: '2024-01-15T10:30:00Z',
+    createdAt: '2024-01-15T10:30:00Z',
+    elements: [],
+    canvasConfig: {
+      width: 100,
+      height: 50,
+      dpi: 300,
+      backgroundColor: '#ffffff',
+      gridEnabled: true
+    }
   },
   {
-    id: 2,
+    id: 'template_2',
     name: 'RFID标签模板2',
-    updateTime: '2026-02-02 14:15',
-    type: 'rfid',
-    width: 80,
-    height: 40
+    updatedAt: '2024-01-16T14:20:00Z',
+    createdAt: '2024-01-16T14:20:00Z',
+    elements: [],
+    canvasConfig: {
+      width: 80,
+      height: 40,
+      dpi: 300,
+      backgroundColor: '#ffffff',
+      gridEnabled: true
+    }
   }
 ])
 
-// 创建模板相关
-const showCreateDialog = ref(false)
-const newTemplate = reactive({
-  name: '',
-  type: 'rfid',
-  width: 100,
-  height: 50
-})
+// 加载模板数据
+const loadTemplates = () => {
+  const savedTemplates = localStorage.getItem('rfidDesigns')
+  if (savedTemplates) {
+    try {
+      const parsedTemplates = JSON.parse(savedTemplates)
+      if (Array.isArray(parsedTemplates)) {
+        templates.value = parsedTemplates
+      }
+    } catch (error) {
+      console.error('加载模板数据失败:', error)
+    }
+  }
+}
 
+// 格式化日期
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString)
+  return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+}
+
+// 创建模板 - 跳转到设计器页面
 const createTemplate = () => {
-  // 重置表单
-  newTemplate.name = ''
-  newTemplate.type = 'rfid'
-  newTemplate.width = 100
-  newTemplate.height = 50
-  showCreateDialog.value = true
-}
-
-const closeDialog = () => {
-  showCreateDialog.value = false
-}
-
-const confirmCreate = () => {
-  if (!newTemplate.name.trim()) {
-    alert('请输入模板名称')
-    return
-  }
-
-  const newId = templates.value.length > 0 
-    ? Math.max(...templates.value.map(t => t.id)) + 1 
-    : 1
-
-  const now = new Date()
-  const formattedTime = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
-
-  templates.value.unshift({
-    id: newId,
-    name: newTemplate.name,
-    updateTime: formattedTime,
-    type: newTemplate.type,
-    width: newTemplate.width,
-    height: newTemplate.height
+  // 生成新的模板ID
+  const newTemplateId = `template_${Date.now()}`
+  
+  // 跳转到设计器页面，传递新的模板ID
+  router.push({
+    name: 'TemplateDesign',
+    params: { id: newTemplateId }
   })
-
-  showCreateDialog.value = false
-  // 这里可以调用API保存到后端
 }
 
-const editTemplate = (id: number) => {
-  const template = templates.value.find(t => t.id === id)
-  if (template) {
-    alert(`编辑模板: ${template.name}`)
-    // 实际项目中这里应该打开编辑对话框
-  }
+// 编辑模板 - 跳转到设计器页面
+const editTemplate = (id: string) => {
+  router.push({
+    name: 'TemplateDesign',
+    params: { id }
+  })
 }
 
-const deleteTemplate = (id: number) => {
+// 删除模板
+const deleteTemplate = (id: string) => {
   if (confirm('确定要删除这个模板吗？')) {
     const index = templates.value.findIndex(t => t.id === id)
     if (index !== -1) {
       templates.value.splice(index, 1)
+      
+      // 保存到本地存储
+      localStorage.setItem('rfidDesigns', JSON.stringify(templates.value))
     }
   }
 }
+
+// 初始化
+onMounted(() => {
+  loadTemplates()
+})
 </script>
 
 <style scoped>
