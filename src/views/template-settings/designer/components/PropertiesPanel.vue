@@ -22,6 +22,18 @@
               @change="updateElement"
             />
           </div>
+
+          <!-- 数据字段（仅对动态元素） -->
+          <div v-if="supportsDataField" class="property-row">
+            <label>数据字段</label>
+            <input
+              v-model="(localElement as any).dataField"
+              type="text"
+              class="property-input"
+              placeholder="字段名"
+              @change="updateElement"
+            />
+          </div>
           
           <div class="property-row">
             <label>位置 X</label>
@@ -80,19 +92,7 @@
             <span class="unit">°</span>
           </div>
           
-          <div class="property-row">
-            <label>不透明度</label>
-            <input
-              v-model.number="localElement.opacity"
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              class="property-slider"
-              @change="updateElement"
-            />
-            <span class="value">{{ Math.round(localElement.opacity * 100) }}%</span>
-          </div>
+          
         </div>
       </div>
       
@@ -105,12 +105,12 @@
         <div class="property-group">
           <div class="property-row">
             <label>内容</label>
-            <textarea
+            <input
               v-model="(localElement as any).content"
-              class="property-textarea"
-              rows="3"
+              type="text"
+              class="property-input"
               @change="updateElement"
-            ></textarea>
+            />
           </div>
           
           <div class="property-row">
@@ -314,8 +314,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import type { DesignElement } from '../types'
+import { ElementType } from '../types'
 
 interface Props {
   element: DesignElement
@@ -331,6 +332,13 @@ const emit = defineEmits<Emits>()
 
 // 本地元素副本（用于双向绑定）
 const localElement = ref({ ...props.element })
+
+// 计算是否支持数据字段
+const supportsDataField = computed(() => {
+  return localElement.value.type === ElementType.TEXT || 
+         localElement.value.type === ElementType.RFID ||
+         localElement.value.type === ElementType.BARCODE
+})
 
 // 监听父组件元素变化
 watch(() => props.element, (newElement) => {

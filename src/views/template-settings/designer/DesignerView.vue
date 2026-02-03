@@ -49,7 +49,10 @@ import DesignerToolbar from './components/Toolbar.vue'
 import ElementsPanel from './components/ElementsPanel.vue'
 import Canvas from './components/Canvas.vue'
 import PropertiesPanel from './components/PropertiesPanel.vue'
-import type { CanvasConfig, DesignElement, ElementType } from './types'
+import type { CanvasConfig, DesignElement } from './types'
+import type { TemplateSaveRequest, TemplateElement } from './services/types.ts'
+import { ElementType } from './types'
+import { apiService } from './services/api.ts'
 
 const route = useRoute()
 const router = useRouter()
@@ -160,37 +163,56 @@ const handleElementDelete = (elementId: string) => {
 
 // 保存设计
 const handleSave = async () => {
+  console.group('💾 开始保存模板操作')
+  console.log('📝 当前模板信息:')
+  console.log('  🆔 ID:', templateId.value)
+  console.log('  📝 名称:', templateName.value)
+  console.log('  📐 画布配置:', canvasConfig.value)
+  console.log('  🔤 元素数量:', elements.value.length)
+  console.log('  🕐 创建时间:', new Date().toISOString())
+  
   try {
-    // 准备设计数据
-    const designData = {
-      id: templateId.value,
+    // 准备设计数据 - 按照services/types.ts中TemplateSaveRequest接口要求的结构
+    const saveRequest: TemplateSaveRequest = {
+      id: templateId.value || undefined,
       name: templateName.value,
-      canvasConfig: canvasConfig.value,
-      elements: elements.value,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      description: 'RFID标签设计模板',
+      width: canvasConfig.value.width,
+      height: canvasConfig.value.height,
+      elements: elements.value.map(element => ({
+        id: element.id,
+        type: element.type as any, // 类型转换以解决枚举不匹配问题
+        x: element.x,
+        y: element.y,
+        width: element.width,
+        height: element.height,
+        rotation: element.rotation,
+        zIndex: element.zIndex
+      })) as TemplateElement[],
+      category: 'rfid_label'
     }
     
-    // 保存到localStorage（模拟后端API）
-    const designs = JSON.parse(localStorage.getItem('rfidDesigns') || '[]')
-    const existingIndex = designs.findIndex((d: any) => d.id === designData.id)
+    console.log('📦 准备保存的数据:', saveRequest)
+    console.log('💾 数据大小估算:', JSON.stringify(saveRequest).length, '字符')
     
-    if (existingIndex !== -1) {
-      designs[existingIndex] = designData
-    } else {
-      designs.push(designData)
-    }
+    // 调用后端API保存模板
+    console.log('🚀 开始调用后端API保存...')
+    const response = await apiService.saveTemplate(saveRequest)
     
-    localStorage.setItem('rfidDesigns', JSON.stringify(designs))
+    console.log('✅ 后端保存成功')
+    console.log('📥 后端响应:', response)
     
     // 保存成功提示
     alert('保存成功！')
+    console.log('🎉 保存操作完成')
     
     // 返回模板设置页面
     handleBack()
   } catch (error) {
-    console.error('保存失败:', error)
+    console.error('💥 保存失败:', error)
     alert('保存失败，请重试')
+  } finally {
+    console.groupEnd()
   }
 }
 
