@@ -57,9 +57,79 @@ class ApiService {
     console.log('🔐 Token状态:', localStorage.getItem('accessToken') ? '已认证' : '未认证')
     
     try {
+      // 将扁平的TemplateSaveRequest转换为后端要求的嵌套结构
+      // 根据项目规范：必须为嵌套结构 {template: {...}, options: {...}, context: {...}}
+      const saveRequest = {
+        template: {
+          id: request.id,
+          name: request.name,
+          description: request.description || 'RFID标签设计模板',
+          width: request.width,
+          height: request.height,
+          category: request.category || 'rfid_label',
+          config: {
+            metadata: {
+              version: '1.0',
+              description: request.description || 'RFID标签设计模板'
+            },
+            canvas: {
+              width: request.width,
+              height: request.height,
+              dpi: 300,
+              backgroundColor: '#ffffff',
+              unit: 'mm'
+            },
+            elements: request.elements?.map(element => ({
+              id: element.id,
+              type: element.type,
+              x: element.x,
+              y: element.y,
+              width: element.width,
+              height: element.height,
+              rotation: element.rotation || 0,
+              zIndex: element.zIndex || 1,
+              opacity: element.opacity || 1.0,
+              // 添加类型特定属性（简化处理）
+              ...(element.type === 'text' && {
+                content: (element as any).content || '',
+                fontSize: (element as any).fontSize || 12,
+                fontFamily: (element as any).fontFamily || 'Arial',
+                fontWeight: (element as any).fontWeight || 'normal',
+                color: (element as any).color || '#000000',
+                textAlign: (element as any).textAlign || 'left'
+              }),
+              ...(element.type === 'barcode' && {
+                format: (element as any).format || 'CODE128',
+                data: (element as any).data || '',
+                humanReadable: (element as any).humanReadable !== undefined ? (element as any).humanReadable : true,
+                textBelow: (element as any).textBelow !== undefined ? (element as any).textBelow : true,
+                moduleWidth: (element as any).moduleWidth || 2
+              })
+            })) || [],
+            dataFields: {},
+            printer: {
+              model: 'Zebra ZT410',
+              density: 8,
+              speed: 4
+            }
+          }
+        },
+        options: {
+          overwrite: false,
+          generatePreview: true,
+          testPrint: false
+        },
+        context: {
+          userId: localStorage.getItem('userId') || 'unknown',
+          clientId: 'web_client'
+        }
+      };
+
+      console.log('📦 转换后的请求体:', saveRequest);
+      
       const response = await this.request(`${this.baseUrl}/templates/save`, {
         method: 'POST',
-        body: JSON.stringify(request)
+        body: JSON.stringify(saveRequest)
       })
 
       console.log('📡 HTTP响应状态:', response.status)
