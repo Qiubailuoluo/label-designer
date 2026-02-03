@@ -88,7 +88,6 @@ class ApiService {
               height: element.height,
               rotation: element.rotation || 0,
               zIndex: element.zIndex || 1,
-              opacity: element.opacity || 1.0,
               // 添加类型特定属性（简化处理）
               ...(element.type === 'text' && {
                 content: (element as any).content || '',

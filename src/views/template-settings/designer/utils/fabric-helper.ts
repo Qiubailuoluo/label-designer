@@ -156,7 +156,6 @@ export const updateFabricObject = (obj: fabric.Object, element: DesignElement, d
     left: mmToPx(element.x, dpi),
     top: mmToPx(element.y, dpi),
     angle: element.rotation || 0,
-    opacity: element.opacity || 1,
     visible: element.visible !== false
   })
   
@@ -258,7 +257,6 @@ export const getElementFromFabricObject = (obj: fabric.Object, dpi: number = 300
     width: pxToMm(actualWidth, dpi),
     height: pxToMm(actualHeight, dpi),
     rotation: obj.angle || 0,
-    opacity: obj.opacity || 1,
     visible: obj.visible !== false
   }
   

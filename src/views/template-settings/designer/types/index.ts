@@ -17,7 +17,6 @@ export interface BaseElement {
   width: number    // 宽度 (mm)
   height: number   // 高度 (mm)
   rotation: number // 旋转角度
-  opacity: number  // 不透明度 0-1
   visible: boolean // 是否可见
   zIndex: number   // 层级
   dataField?: string // 数据字段名（可选）
