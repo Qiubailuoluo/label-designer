@@ -46,7 +46,7 @@ const router = createRouter({
          {
           path: 'template-design/:id?', // :id? 表示id是可选的
           name: 'TemplateDesign',
-          component: () => import('@/views/template-settings/designer/DesignerView.vue'),
+          component: () => import('@/views/template-settings/templatesetting-designer/DesignerView.vue'),
           meta: { 
             requiresAuth: true,
             title: '标签设计器'

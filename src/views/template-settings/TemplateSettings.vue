@@ -49,12 +49,18 @@
         </tbody>
       </table>
     </div>
+    
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-overlay">
+      <div class="loading-spinner">加载中...</div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { apiService } from './templatesetting-designer/services/api.ts'
 
 const router = useRouter()
 
@@ -67,50 +73,46 @@ interface TemplateItem {
   canvasConfig: any
 }
 
-const templates = ref<TemplateItem[]>([
-  // 示例数据
-  {
-    id: 'template_1',
-    name: 'RFID标签模板1',
-    updatedAt: '2024-01-15T10:30:00Z',
-    createdAt: '2024-01-15T10:30:00Z',
-    elements: [],
-    canvasConfig: {
-      width: 100,
-      height: 50,
-      dpi: 300,
-      backgroundColor: '#ffffff',
-      gridEnabled: true
-    }
-  },
-  {
-    id: 'template_2',
-    name: 'RFID标签模板2',
-    updatedAt: '2024-01-16T14:20:00Z',
-    createdAt: '2024-01-16T14:20:00Z',
-    elements: [],
-    canvasConfig: {
-      width: 80,
-      height: 40,
-      dpi: 300,
-      backgroundColor: '#ffffff',
-      gridEnabled: true
-    }
-  }
-])
+const templates = ref<TemplateItem[]>([])
+const loading = ref(false)
 
-// 加载模板数据
-const loadTemplates = () => {
-  const savedTemplates = localStorage.getItem('rfidDesigns')
-  if (savedTemplates) {
-    try {
-      const parsedTemplates = JSON.parse(savedTemplates)
-      if (Array.isArray(parsedTemplates)) {
-        templates.value = parsedTemplates
-      }
-    } catch (error) {
-      console.error('加载模板数据失败:', error)
+// 加载模板数据 - 使用真实API
+const loadTemplates = async () => {
+  try {
+    loading.value = true
+    console.log('📥 开始加载模板列表...')
+    
+    // 调用真实API获取模板列表
+    const response = await apiService.getTemplateList()
+    
+    // 根据实际API响应结构调整数据映射
+    if (response && Array.isArray(response.templates)) {
+      templates.value = response.templates.map((template: any) => ({
+        id: template.id,
+        name: template.name,
+        updatedAt: template.updatedAt || template.createdAt || new Date().toISOString(),
+        createdAt: template.createdAt || new Date().toISOString(),
+        elements: [], // 实际元素数据需要单独加载
+        canvasConfig: {
+          width: template.width || 100,
+          height: template.height || 60,
+          dpi: 300,
+          backgroundColor: '#ffffff',
+          gridEnabled: true
+        }
+      }))
+      console.log('✅ 模板列表加载成功，共', templates.value.length, '个模板')
+    } else {
+      console.warn('⚠️ API响应格式不符合预期:', response)
+      templates.value = []
     }
+  } catch (error) {
+    console.error('💥 加载模板列表失败:', error)
+    // 失败时显示错误提示，但仍显示空状态
+    templates.value = []
+    alert('加载模板列表失败，请稍后重试')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -140,15 +142,26 @@ const editTemplate = (id: string) => {
   })
 }
 
-// 删除模板
-const deleteTemplate = (id: string) => {
+// 删除模板 - 使用真实API
+const deleteTemplate = async (id: string) => {
   if (confirm('确定要删除这个模板吗？')) {
-    const index = templates.value.findIndex(t => t.id === id)
-    if (index !== -1) {
-      templates.value.splice(index, 1)
+    try {
+      console.log('🗑️ 开始删除模板:', id)
       
-      // 保存到本地存储
-      localStorage.setItem('rfidDesigns', JSON.stringify(templates.value))
+      // 调用真实API删除模板
+      await apiService.deleteTemplate(id)
+      
+      // 从本地列表中移除
+      const index = templates.value.findIndex(t => t.id === id)
+      if (index !== -1) {
+        templates.value.splice(index, 1)
+      }
+      
+      console.log('✅ 模板删除成功')
+      alert('模板删除成功')
+    } catch (error) {
+      console.error('💥 删除模板失败:', error)
+      alert('删除模板失败，请稍后重试')
     }
   }
 }
@@ -161,4 +174,25 @@ onMounted(() => {
 
 <style scoped>
 @import './css/template-settings.css';
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.loading-spinner {
+  background: white;
+  padding: 20px 40px;
+  border-radius: 8px;
+  font-size: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
 </style>
