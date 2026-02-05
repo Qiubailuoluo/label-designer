@@ -122,15 +122,12 @@ const formatDate = (dateString: string) => {
   return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
 }
 
-// 创建模板 - 跳转到设计器页面
+// 创建模板 - 跳转到设计器页面（不传递ID，用于创建新模板）
 const createTemplate = () => {
-  // 生成新的模板ID
-  const newTemplateId = `template_${Date.now()}`
-  
-  // 跳转到设计器页面，传递新的模板ID
+  // 跳转到设计器页面，不传递ID参数（创建空模板）
   router.push({
     name: 'TemplateDesign',
-    params: { id: newTemplateId }
+    params: {} // 不传递id参数
   })
 }
 

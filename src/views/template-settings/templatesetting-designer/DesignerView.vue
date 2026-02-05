@@ -228,7 +228,21 @@ const handleBack = () => {
 
 // 加载模板数据
 const loadTemplateData = async () => {
-  if (!templateId.value) return
+  // 如果没有模板ID，初始化为空白模板（创建模式）
+  if (!templateId.value) {
+    console.log('🆕 初始化空白模板（创建模式）')
+    elements.value = []
+    selectedElement.value = null
+    canvasConfig.value = {
+      width: 100,
+      height: 60,
+      dpi: 300,
+      backgroundColor: '#ffffff',
+      gridEnabled: true
+    }
+    templateName.value = '新标签设计'
+    return
+  }
   
   try {
     console.log('📥 开始加载模板数据:', templateId.value)
@@ -343,8 +357,6 @@ const handleBeforeUnload = (e: BeforeUnloadEvent) => {
 
 // 初始化
 onMounted(() => {
-  loadTemplateData()
-  
   // 添加页面离开提示
   window.addEventListener('beforeunload', handleBeforeUnload)
 })
@@ -354,7 +366,7 @@ onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 
-// 监听路由变化
+// 监听路由变化 - 保留immediate: true确保首次加载时调用
 watch(() => route.params.id, () => {
   loadTemplateData()
 }, { immediate: true })
