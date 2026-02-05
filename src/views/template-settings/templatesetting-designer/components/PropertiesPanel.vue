@@ -301,6 +301,97 @@
         </div>
       </div>
       
+      <!-- 条码属性 -->
+      <div v-if="localElement.type === 'barcode'" class="property-section">
+        <div class="section-header">
+          <span class="section-title">条码属性</span>
+        </div>
+        
+        <div class="property-group">
+          <div class="property-row">
+            <label>内容</label>
+            <input
+              v-model="(localElement as any).content"
+              type="text"
+              class="property-input"
+              @change="updateElement"
+            />
+          </div>
+          
+          <div class="property-row">
+            <label>条码类型</label>
+            <select
+              v-model="(localElement as any).format"
+              class="property-select"
+              @change="updateElement"
+            >
+              <option value="CODE128">CODE128</option>
+              <option value="EAN13">EAN13</option>
+              <option value="UPC-A">UPC-A</option>
+              <option value="QR">QR Code</option>
+              <option value="PDF417">PDF417</option>
+            </select>
+          </div>
+          
+          <!-- 数据字段（仅对动态元素） -->
+          <div v-if="supportsDataField" class="property-row">
+            <label>数据字段</label>
+            <input
+              v-model="(localElement as any).dataField"
+              type="text"
+              class="property-input"
+              placeholder="字段名"
+              @change="updateElement"
+            />
+          </div>
+        </div>
+      </div>
+      
+      <!-- 图片属性 -->
+      <div v-if="localElement.type === 'image'" class="property-section">
+        <div class="section-header">
+          <span class="section-title">图片属性</span>
+        </div>
+        
+        <div class="property-group">
+          <div class="property-row">
+            <label>图片源</label>
+            <div class="image-upload-container">
+              <input
+                type="file"
+                accept="image/*"
+                @change="handleImageUpload"
+                class="image-upload-input"
+              />
+              <button class="upload-btn">选择图片</button>
+              <span v-if="(localElement as any).src" class="current-image">{{ (localElement as any).src }}</span>
+            </div>
+          </div>
+          
+          <div class="property-row">
+            <label>替代文本</label>
+            <input
+              v-model="(localElement as any).alt"
+              type="text"
+              class="property-input"
+              @change="updateElement"
+            />
+          </div>
+          
+          <!-- 数据字段（仅对动态元素） -->
+          <div v-if="supportsDataField" class="property-row">
+            <label>数据字段</label>
+            <input
+              v-model="(localElement as any).dataField"
+              type="text"
+              class="property-input"
+              placeholder="字段名"
+              @change="updateElement"
+            />
+          </div>
+        </div>
+      </div>
+      
       <!-- 操作按钮 -->
       <div class="property-section actions-section">
         <div class="property-group">
@@ -350,9 +441,12 @@ const getElementTypeName = (type: string): string => {
   const names: Record<string, string> = {
     'text': '文本',
     'rectangle': '矩形',
+    'circle': '圆形',
+    'line': '线条',
     'rfid': 'RFID字段',
     'image': '图片',
-    'barcode': '条形码'
+    'barcode': '条形码',
+    'qrCode': '二维码'
   }
   return names[type] || type
 }
@@ -373,8 +467,61 @@ const handleDelete = () => {
     emit('element-delete', props.element.id)
   }
 }
+
+// 处理图片上传
+const handleImageUpload = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (input.files && input.files[0]) {
+    const file = input.files[0]
+    
+    // 创建文件读取器
+    const reader = new FileReader()
+    
+    reader.onload = (e) => {
+      const imageUrl = e.target?.result as string
+      // 更新本地元素的src属性
+      (localElement.value as any).src = imageUrl
+      updateElement()
+    }
+    
+    reader.readAsDataURL(file)
+  }
+}
 </script>
 
 <style scoped>
 @import '../css/properties-panel.scss';
+
+.image-upload-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.image-upload-input {
+  display: none;
+}
+
+.upload-btn {
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.upload-btn:hover {
+  background-color: #45a049;
+}
+
+.current-image {
+  font-size: 12px;
+  color: #666;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 </style>
