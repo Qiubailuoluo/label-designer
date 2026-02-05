@@ -162,15 +162,7 @@ const handleElementDelete = (elementId: string) => {
 }
 
 // 保存设计
-const isSaving = ref(false) // 添加保存状态锁
-
 const handleSave = async () => {
-  // 防止重复保存
-  if (isSaving.value) {
-    console.warn('⚠️ 保存操作正在进行中，忽略重复调用')
-    return
-  }
-
   console.group('💾 开始保存模板操作')
   console.log('📝 当前模板信息:')
   console.log('  🆔 ID:', templateId.value)
@@ -180,8 +172,6 @@ const handleSave = async () => {
   console.log('  🕐 创建时间:', new Date().toISOString())
   
   try {
-    isSaving.value = true // 设置保存中状态
-    
     // 准备设计数据 - 按照services/types.ts中TemplateSaveRequest接口要求的结构
     const saveRequest: TemplateSaveRequest = {
       id: templateId.value || undefined,
@@ -222,7 +212,6 @@ const handleSave = async () => {
     console.error('💥 保存失败:', error)
     alert('保存失败，请重试')
   } finally {
-    isSaving.value = false // 重置保存状态
     console.groupEnd()
   }
 }
@@ -237,25 +226,28 @@ const handleBack = () => {
   router.push('/template-settings')
 }
 
+// 添加加载状态标记，防止重复加载
+let isLoadingTemplate = false
+
 // 加载模板数据
 const loadTemplateData = async () => {
+  // 防止重复加载
+  if (isLoadingTemplate) {
+    console.log('🔄 模板数据正在加载中，跳过重复请求')
+    return
+  }
+  
   // 如果没有模板ID，初始化为空白模板（创建模式）
   if (!templateId.value) {
     console.log('🆕 初始化空白模板（创建模式）')
-    elements.value = []
-    selectedElement.value = null
-    canvasConfig.value = {
-      width: 100,
-      height: 60,
-      dpi: 300,
-      backgroundColor: '#ffffff',
-      gridEnabled: true
-    }
-    templateName.value = '新标签设计'
+    
+    // 重置所有状态
+    resetDesignerState()
     return
   }
   
   try {
+    isLoadingTemplate = true
     console.log('📥 开始加载模板数据:', templateId.value)
     
     // 调用真实API加载模板
@@ -267,6 +259,9 @@ const loadTemplateData = async () => {
       alert('加载模板数据失败：响应数据格式不正确')
       return
     }
+    
+    // 重置设计器状态
+    resetDesignerState()
     
     // 根据后端实际返回的数据格式处理
     // 后端返回: response.data = { id, name, width, height, config, ... }
@@ -288,45 +283,74 @@ const loadTemplateData = async () => {
     // 处理元素数据
     const elementsArray = templateData.config?.elements || []
     if (Array.isArray(elementsArray)) {
-      elements.value = elementsArray.map((element: any) => ({
-        id: element.id,
-        type: element.type,
-        name: element.name || element.type || '未命名元素',
-        x: element.x || 0,
-        y: element.y || 0,
-        width: element.width || 50,
-        height: element.height || 20,
-        rotation: element.rotation || 0,
-        opacity: element.opacity !== undefined ? element.opacity : 1,
-        visible: element.visible !== undefined ? element.visible : true,
-        zIndex: element.zIndex || 1,
+      elements.value = elementsArray.map((element: any) => {
+        // 类型映射：处理后端返回的不同类型标识
+        let mappedType = element.type
+        if (element.type === 'title') {
+          mappedType = 'text' // 将title映射为text类型
+        }
+        
+        const baseElement = {
+          id: element.id,
+          type: mappedType,
+          name: element.name || element.type || '未命名元素',
+          x: element.x || 0,
+          y: element.y || 0,
+          width: element.width || 50,
+          height: element.height || 20,
+          rotation: element.rotation || 0,
+          opacity: element.opacity !== undefined ? element.opacity : 1,
+          visible: element.visible !== undefined ? element.visible : true,
+          zIndex: element.zIndex || 1
+        }
+        
         // 根据元素类型添加特定属性
-        ...(element.type === 'text' && {
-          content: element.content || '',
-          fontSize: element.fontSize || 12,
-          fontFamily: element.fontFamily || 'Arial',
-          fontWeight: element.fontWeight || 'normal',
-          color: element.color || '#000000',
-          textAlign: element.textAlign || 'left'
-        }),
-        ...(element.type === 'barcode' && {
-          content: element.data || element.content || '',
-          format: element.format || 'CODE128'
-        }),
-        ...(element.type === 'qrCode' && {
-          content: element.content || ''
-        }),
-        ...(element.type === 'rectangle' && {
-          fillColor: element.fillColor || '#ffffff',
-          strokeColor: element.strokeColor || '#000000',
-          strokeWidth: element.strokeWidth || 1
-        }),
-        ...(element.type === 'circle' && {
-          fillColor: element.fillColor || '#ffffff',
-          strokeColor: element.strokeColor || '#000000',
-          strokeWidth: element.strokeWidth || 1
-        })
-      })) as DesignElement[]
+        switch (mappedType) {
+          case 'text':
+          case 'title':
+            return {
+              ...baseElement,
+              content: element.content || '',
+              fontSize: element.fontSize || 12,
+              fontFamily: element.fontFamily || 'Arial',
+              fontWeight: element.fontWeight || 'normal',
+              color: element.color || '#000000',
+              textAlign: element.textAlign || 'left'
+            } as any
+            
+          case 'barcode':
+            return {
+              ...baseElement,
+              content: element.data || element.content || '',
+              format: element.format || 'CODE128'
+            } as any
+            
+          case 'qrCode':
+            return {
+              ...baseElement,
+              content: element.content || ''
+            } as any
+            
+          case 'rectangle':
+            return {
+              ...baseElement,
+              fillColor: element.fillColor || '#ffffff',
+              strokeColor: element.strokeColor || '#000000',
+              strokeWidth: element.strokeWidth || 1
+            } as any
+            
+          case 'circle':
+            return {
+              ...baseElement,
+              fillColor: element.fillColor || '#ffffff',
+              strokeColor: element.strokeColor || '#000000',
+              strokeWidth: element.strokeWidth || 1
+            } as any
+            
+          default:
+            return baseElement as any
+        }
+      }) as DesignElement[]
     } else {
       console.warn('⚠️ 元素数据不是数组格式，使用空数组:', elementsArray)
       elements.value = []
@@ -335,17 +359,20 @@ const loadTemplateData = async () => {
     console.log('✅ 模板数据加载成功:', {
       name: templateName.value,
       canvas: canvasConfig.value,
-      elementsCount: elements.value.length
+      elementsCount: elements.value.length,
+      elementTypes: elements.value.map(e => e.type)
     })
     
     // 通知画布更新配置和元素
     if (canvasRef.value) {
       canvasRef.value.updateConfig(canvasConfig.value)
-      // 清空并重新添加所有元素
-      canvasRef.value.clearCanvas()
-      elements.value.forEach(element => {
-        canvasRef.value?.addElement(element)
-      })
+      
+      // 延迟添加元素，确保画布已正确初始化
+      setTimeout(() => {
+        elements.value.forEach(element => {
+          canvasRef.value?.addElement(element)
+        })
+      }, 100)
     }
   } catch (error) {
     console.error('💥 加载模板数据失败:', error)
@@ -355,7 +382,31 @@ const loadTemplateData = async () => {
     } else {
       alert('加载模板数据失败，请稍后重试')
     }
+  } finally {
+    isLoadingTemplate = false
   }
+}
+
+// 重置设计器状态的辅助函数
+const resetDesignerState = () => {
+  elements.value = []
+  selectedElement.value = null
+  
+  // 重置画布配置为默认值
+  canvasConfig.value = {
+    width: 100,
+    height: 60,
+    dpi: 300,
+    backgroundColor: '#ffffff',
+    gridEnabled: true
+  }
+  
+  // 通知画布清空
+  if (canvasRef.value) {
+    canvasRef.value.clearCanvas()
+  }
+  
+  console.log('🧹 设计器状态已重置')
 }
 
 // 页面离开前提示保存
@@ -377,9 +428,13 @@ onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 
-// 监听路由变化 - 保留immediate: true确保首次加载时调用
-watch(() => route.params.id, () => {
-  loadTemplateData()
+// 监听路由变化 - 添加防抖和状态检查
+watch(() => route.params.id, (newId, oldId) => {
+  // 只有当ID真正改变时才重新加载
+  if (newId !== oldId) {
+    console.log('🔄 路由参数变化:', { from: oldId, to: newId })
+    loadTemplateData()
+  }
 }, { immediate: true })
 </script>
 

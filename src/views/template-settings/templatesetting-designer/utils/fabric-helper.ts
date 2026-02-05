@@ -81,6 +81,102 @@ export const createRectElement = (config: any): fabric.Rect => {
   return rect
 }
 
+// 创建条形码元素
+export const createBarcodeElement = (config: any): fabric.Text => {
+  // 条形码暂时用文本表示，后续可以替换为真正的条形码生成器
+  const barcodeText = new fabric.Text(config.content || config.data || '123456789012', {
+    left: mmToPx(config.x || 0),
+    top: mmToPx(config.y || 0),
+    fontSize: config.fontSize || 14,
+    fill: '#000000',
+    fontFamily: 'monospace',
+    textAlign: 'center',
+    selectable: true,
+    hasControls: true,
+    hasBorders: true,
+    originX: 'left',
+    originY: 'top',
+    lockUniScaling: false,
+    lockScalingFlip: true,
+    lockMovementX: false,
+    lockMovementY: false,
+    lockRotation: false,
+    cornerStyle: 'circle',
+    cornerColor: '#2196f3',
+    cornerSize: 8,
+    transparentCorners: false
+  })
+
+  barcodeText.set('elementId', config.id)
+  barcodeText.set('type', ElementType.BARCODE)
+
+  return barcodeText
+}
+
+// 创建二维码元素
+export const createQrCodeElement = (config: any): fabric.Rect => {
+  // 二维码暂时用矩形表示，后续可以替换为真正的二维码生成器
+  const qrRect = new fabric.Rect({
+    left: mmToPx(config.x || 0),
+    top: mmToPx(config.y || 0),
+    width: mmToPx(config.width || 30),
+    height: mmToPx(config.height || 30),
+    fill: '#000000',
+    stroke: '#000000',
+    strokeWidth: 1,
+    selectable: true,
+    hasControls: true,
+    hasBorders: true,
+    originX: 'left',
+    originY: 'top',
+    lockScalingY: false,
+    lockScalingX: false,
+    lockScalingFlip: true,
+    lockMovementX: false,
+    lockMovementY: false,
+    lockRotation: false,
+    cornerStyle: 'circle',
+    cornerColor: '#2196f3',
+    cornerSize: 8,
+    transparentCorners: false
+  })
+
+  qrRect.set('elementId', config.id)
+  qrRect.set('type', ElementType.QRCODE)
+
+  return qrRect
+}
+
+// 创建圆形元素
+export const createCircleElement = (config: any): fabric.Circle => {
+  const circle = new fabric.Circle({
+    left: mmToPx(config.x || 0),
+    top: mmToPx(config.y || 0),
+    radius: mmToPx(Math.min(config.width, config.height) / 2 || 15),
+    fill: config.fillColor || '#ffffff',
+    stroke: config.strokeColor || '#000000',
+    strokeWidth: config.strokeWidth || 1,
+    selectable: true,
+    hasControls: true,
+    hasBorders: true,
+    originX: 'left',
+    originY: 'top',
+    lockScalingFlip: true,
+    lockMovementX: false,
+    lockMovementY: false,
+    lockRotation: false,
+    cornerStyle: 'circle',
+    cornerColor: '#2196f3',
+    cornerSize: 8,
+    transparentCorners: false
+  })
+
+  circle.set('elementId', config.id)
+  circle.set('type', ElementType.CIRCLE)
+
+  return circle
+}
+
 // 创建RFID元素（组）
 export const createRfidElement = (config: any): fabric.Group => {
   const textContent = config.showLabel 
@@ -142,10 +238,18 @@ export const createFabricObject = (element: DesignElement, dpi: number = 300): f
       return createTextElement(elementWithDpi)
     case ElementType.RECTANGLE:
       return createRectElement(elementWithDpi)
+    case ElementType.BARCODE:
+      return createBarcodeElement(elementWithDpi)
+    case ElementType.QRCODE:
+      return createQrCodeElement(elementWithDpi)
+    case ElementType.CIRCLE:
+      return createCircleElement(elementWithDpi)
     case ElementType.RFID:
       return createRfidElement(elementWithDpi)
     default:
-      return createTextElement(elementWithDpi)
+      // 处理未知类型，回退到文本元素
+      console.warn(`⚠️ 未知元素类型: ${element.type}, 使用文本元素替代`)
+      return createTextElement({ ...elementWithDpi, content: `[${element.type}] ${element.name || '未知元素'}` })
   }
 }
 
@@ -187,6 +291,43 @@ export const updateFabricObject = (obj: fabric.Object, element: DesignElement, d
           strokeWidth: rectElement.strokeWidth || 1,
           rx: rectElement.cornerRadius || 0,
           ry: rectElement.cornerRadius || 0
+        })
+      }
+      break
+      
+    case ElementType.BARCODE:
+      if (obj instanceof fabric.Text) {
+        const barcodeElement = element as any
+        obj.set({
+          text: barcodeElement.content || barcodeElement.data || '123456789012',
+          fontSize: barcodeElement.fontSize || 14,
+          fill: '#000000',
+          fontFamily: 'monospace',
+          textAlign: 'center'
+        })
+      }
+      break
+      
+    case ElementType.QRCODE:
+      if (obj instanceof fabric.Rect) {
+        obj.set({
+          width: mmToPx(element.width, dpi),
+          height: mmToPx(element.height, dpi),
+          fill: '#000000',
+          stroke: '#000000',
+          strokeWidth: 1
+        })
+      }
+      break
+      
+    case ElementType.CIRCLE:
+      if (obj instanceof fabric.Circle) {
+        const circleElement = element as any
+        obj.set({
+          radius: mmToPx(Math.min(element.width, element.height) / 2, dpi),
+          fill: circleElement.fillColor || '#ffffff',
+          stroke: circleElement.strokeColor || '#000000',
+          strokeWidth: circleElement.strokeWidth || 1
         })
       }
       break

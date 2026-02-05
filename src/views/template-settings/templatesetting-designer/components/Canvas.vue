@@ -44,6 +44,11 @@ const elementMap = new Map<string, fabric.Object>()
 // 是否正在通过程序更新（避免循环更新）
 let isProgrammaticUpdate = false
 
+// 是否正在批量更新（避免频繁渲染）
+let isBatchUpdating = false
+// 批量更新队列
+let batchUpdateQueue: (() => void)[] = []
+
 // 初始化画布
 const initCanvas = () => {
   if (!canvasRef.value || !containerRef.value) return
@@ -165,13 +170,26 @@ const renderAllElements = () => {
 const addElementToCanvas = (element: DesignElement) => {
   if (!fabricCanvas) return
   
+  // 检查元素是否已存在
+  if (elementMap.has(element.id)) {
+    console.warn(`⚠️ 元素 ${element.id} 已存在于画布中，跳过添加`)
+    return
+  }
+  
   const fabricObject = createFabricObject(element, props.config.dpi)
   
   // 存储到映射
   elementMap.set(element.id, fabricObject)
   
-  fabricCanvas.add(fabricObject)
-  fabricCanvas.renderAll()
+  // 批量添加到画布
+  if (isBatchUpdating) {
+    batchUpdateQueue.push(() => {
+      fabricCanvas?.add(fabricObject)
+    })
+  } else {
+    fabricCanvas.add(fabricObject)
+    fabricCanvas.renderAll()
+  }
 }
 
 // 更新画布上的元素（不重新创建）
@@ -194,7 +212,9 @@ const updateElementOnCanvas = (element: DesignElement) => {
       fabricCanvas.setActiveObject(existingObject)
     }
     
-    fabricCanvas.requestRenderAll()
+    if (!isBatchUpdating) {
+      fabricCanvas.requestRenderAll()
+    }
   } else {
     // 如果不存在，添加新对象
     addElementToCanvas(element)
@@ -226,10 +246,15 @@ const removeElementFromCanvas = (elementId: string) => {
 // 清空画布所有元素
 const clearCanvas = () => {
   if (fabricCanvas) {
+    // 批量清除
+    isBatchUpdating = true
     fabricCanvas.clear()
     elementMap.clear()
     selectedElementId = null
     emit('element-select', null)
+    isBatchUpdating = false
+    
+    console.log('🧹 画布已清空')
   }
 }
 
@@ -287,28 +312,84 @@ const removeElement = (elementId: string) => {
   removeElementFromCanvas(elementId)
 }
 
-// 监听元素变化
-watch(() => props.elements, (newElements, oldElements) => {
-  // 比较新旧元素，找出需要添加、更新、删除的元素
-  const newIds = new Set(newElements.map(e => e.id))
-  const oldIds = new Set(oldElements.map(e => e.id))
+// 执行批量更新
+const executeBatchUpdates = () => {
+  if (batchUpdateQueue.length === 0) return
   
-  // 找出需要删除的元素
-  const toRemove = [...oldIds].filter(id => !newIds.has(id))
-  toRemove.forEach(id => {
-    removeElementFromCanvas(id)
-  })
+  isBatchUpdating = true
+  const updates = [...batchUpdateQueue]
+  batchUpdateQueue = []
   
-  // 找出需要添加或更新的元素
-  newElements.forEach(element => {
-    if (oldIds.has(element.id)) {
-      // 更新现有元素
-      updateElementOnCanvas(element)
-    } else {
-      // 添加新元素
-      addElementToCanvas(element)
+  try {
+    updates.forEach(updateFn => updateFn())
+    if (fabricCanvas) {
+      fabricCanvas.renderAll()
     }
+  } finally {
+    isBatchUpdating = false
+  }
+}
+
+// 监听元素变化 - 优化版本
+watch(() => props.elements, (newElements, oldElements) => {
+  if (!fabricCanvas || isProgrammaticUpdate) return
+  
+  console.log('🔄 元素列表变化:', {
+    oldCount: oldElements.length,
+    newCount: newElements.length,
+    added: newElements.filter(ne => !oldElements.some(oe => oe.id === ne.id)).map(e => e.id),
+    removed: oldElements.filter(oe => !newElements.some(ne => ne.id === oe.id)).map(e => e.id)
   })
+  
+  // 开始批量更新
+  isBatchUpdating = true
+  batchUpdateQueue = []
+  
+  try {
+    // 比较新旧元素，找出需要添加、更新、删除的元素
+    const newIds = new Set(newElements.map(e => e.id))
+    const oldIds = new Set(oldElements.map(e => e.id))
+    
+    // 找出需要删除的元素
+    const toRemove = [...oldIds].filter(id => !newIds.has(id))
+    toRemove.forEach(id => {
+      const fabricObject = elementMap.get(id)
+      if (fabricObject) {
+        batchUpdateQueue.push(() => {
+          fabricCanvas?.remove(fabricObject)
+        })
+        elementMap.delete(id)
+        
+        // 如果删除的是当前选中的元素，清空选中状态
+        if (selectedElementId === id) {
+          selectedElementId = null
+        }
+      }
+    })
+    
+    // 找出需要添加或更新的元素
+    newElements.forEach(element => {
+      if (oldIds.has(element.id)) {
+        // 更新现有元素
+        updateElementOnCanvas(element)
+      } else {
+        // 添加新元素
+        addElementToCanvas(element)
+      }
+    })
+    
+    // 执行批量更新
+    executeBatchUpdates()
+    
+    // 更新选中状态
+    if (selectedElementId && !newIds.has(selectedElementId)) {
+      selectedElementId = null
+      emit('element-select', null)
+    }
+    
+  } finally {
+    isBatchUpdating = false
+  }
 }, { deep: true })
 
 // 监听配置变化

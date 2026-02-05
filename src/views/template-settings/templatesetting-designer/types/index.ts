@@ -1,9 +1,12 @@
 // 元素类型枚举
 export enum ElementType {
   TEXT = 'text',
+  TITLE = 'title',      // 标题类型
   RECTANGLE = 'rectangle',
+  CIRCLE = 'circle',
   IMAGE = 'image',
   BARCODE = 'barcode',
+  QRCODE = 'qrCode',
   RFID = 'rfid'
 }
 
@@ -48,6 +51,21 @@ export interface BarcodeElement extends BaseElement {
   type: ElementType.BARCODE
   content: string   // 条码内容
   format: string    // 条码格式
+  data?: string     // 兼容旧数据格式
+}
+
+// 二维码元素
+export interface QrCodeElement extends BaseElement {
+  type: ElementType.QRCODE
+  content: string   // 二维码内容
+}
+
+// 圆形元素
+export interface CircleElement extends BaseElement {
+  type: ElementType.CIRCLE
+  fillColor: string      // 填充色
+  strokeColor: string    // 边框色
+  strokeWidth: number    // 边框宽度
 }
 
 // RFID元素
@@ -60,8 +78,20 @@ export interface RfidElement extends BaseElement {
   bgColor: string   // 背景色
 }
 
+// 标题元素（基于文本元素的属性）
+export interface TitleElement extends BaseElement {
+  type: ElementType.TITLE
+  content: string
+  fontSize: number
+  fontFamily: string
+  color: string
+  textAlign: 'left' | 'center' | 'right'
+  bold: boolean
+  italic: boolean
+}
+
 // 元素联合类型
-export type DesignElement = TextElement | RectangleElement | BarcodeElement | RfidElement
+export type DesignElement = TextElement | TitleElement | RectangleElement | CircleElement | BarcodeElement | QrCodeElement | RfidElement
 
 // 画布配置
 export interface CanvasConfig {
