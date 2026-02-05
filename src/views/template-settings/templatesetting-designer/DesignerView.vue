@@ -162,7 +162,15 @@ const handleElementDelete = (elementId: string) => {
 }
 
 // 保存设计
+const isSaving = ref(false) // 添加保存状态锁
+
 const handleSave = async () => {
+  // 防止重复保存
+  if (isSaving.value) {
+    console.warn('⚠️ 保存操作正在进行中，忽略重复调用')
+    return
+  }
+
   console.group('💾 开始保存模板操作')
   console.log('📝 当前模板信息:')
   console.log('  🆔 ID:', templateId.value)
@@ -172,6 +180,8 @@ const handleSave = async () => {
   console.log('  🕐 创建时间:', new Date().toISOString())
   
   try {
+    isSaving.value = true // 设置保存中状态
+    
     // 准备设计数据 - 按照services/types.ts中TemplateSaveRequest接口要求的结构
     const saveRequest: TemplateSaveRequest = {
       id: templateId.value || undefined,
@@ -212,6 +222,7 @@ const handleSave = async () => {
     console.error('💥 保存失败:', error)
     alert('保存失败，请重试')
   } finally {
+    isSaving.value = false // 重置保存状态
     console.groupEnd()
   }
 }
