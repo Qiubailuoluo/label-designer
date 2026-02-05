@@ -229,6 +229,37 @@ export const createRfidElement = (config: any): fabric.Group => {
   return group
 }
 
+// 创建图片元素
+export const createImageElement = (config: any): fabric.Image => {
+  // 创建一个占位符图片，实际使用时需要从URL加载
+  const image = new fabric.Image(null, {
+    left: mmToPx(config.x || 0),
+    top: mmToPx(config.y || 0),
+    width: mmToPx(config.width || 50),
+    height: mmToPx(config.height || 50),
+    selectable: true,
+    hasControls: true,
+    hasBorders: true,
+    originX: 'left',
+    originY: 'top',
+    lockUniScaling: false, // 允许自由缩放
+    lockScalingFlip: true, // 禁止翻转
+    lockMovementX: false,
+    lockMovementY: false,
+    lockRotation: false,
+    cornerStyle: 'circle',
+    cornerColor: '#2196f3',
+    cornerSize: 8,
+    transparentCorners: false
+  })
+
+  // 存储元素ID和类型
+  image.set('elementId', config.id)
+  image.set('type', ElementType.IMAGE)
+
+  return image
+}
+
 // 根据元素类型创建fabric对象
 export const createFabricObject = (element: DesignElement, dpi: number = 300): fabric.Object => {
   const elementWithDpi = { ...element, dpi };
@@ -246,6 +277,8 @@ export const createFabricObject = (element: DesignElement, dpi: number = 300): f
       return createCircleElement(elementWithDpi)
     case ElementType.RFID:
       return createRfidElement(elementWithDpi)
+    case ElementType.IMAGE:
+      return createImageElement(elementWithDpi)
     default:
       // 处理未知类型，回退到文本元素
       console.warn(`⚠️ 未知元素类型: ${element.type}, 使用文本元素替代`)
@@ -362,6 +395,22 @@ export const updateFabricObject = (obj: fabric.Object, element: DesignElement, d
         }
       }
       break
+      
+    case ElementType.IMAGE:
+      if (obj instanceof fabric.Image) {
+        const imageElement = element as any
+        obj.set({
+          width: mmToPx(element.width, dpi),
+          height: mmToPx(element.height, dpi)
+        })
+        
+        // 如果有图片源，可以更新图片
+        if (imageElement.src && imageElement.src !== '') {
+          // 注意：实际图片加载需要异步处理，这里只设置基本属性
+          // 实际应用中可能需要重新加载图片
+        }
+      }
+      break
   }
   
   // 设置缩放为1，确保宽度/高度是实际值
@@ -425,6 +474,15 @@ export const getElementFromFabricObject = (obj: fabric.Object, dpi: number = 300
           stroke: obj.stroke,
           strokeWidth: obj.strokeWidth,
           cornerRadius: obj.rx || 0
+        })
+      }
+      break
+      
+    case ElementType.IMAGE:
+      if (obj instanceof fabric.Image) {
+        // 图片元素的src属性需要特殊处理
+        Object.assign(updates, {
+          src: obj.get('src') || ''
         })
       }
       break

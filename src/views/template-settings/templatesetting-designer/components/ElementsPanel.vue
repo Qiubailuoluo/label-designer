@@ -69,6 +69,44 @@
           </div>
         </div>
       </div>
+      
+      <!-- 条码 -->
+      <div class="element-category">
+        <div class="category-header">
+          <span class="category-icon">🔢</span>
+          <span class="category-name">条码</span>
+        </div>
+        <div class="category-items">
+          <div
+            v-for="element in barcodeElements"
+            :key="element.id"
+            class="element-item"
+            @click="addElement(element.type, element)"
+          >
+            <div class="element-icon">{{ element.icon }}</div>
+            <div class="element-name">{{ element.name }}</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 图片 -->
+      <div class="element-category">
+        <div class="category-header">
+          <span class="category-icon">🖼️</span>
+          <span class="category-name">图片</span>
+        </div>
+        <div class="category-items">
+          <div
+            v-for="element in imageElements"
+            :key="element.id"
+            class="element-item"
+            @click="addElement(element.type, element)"
+          >
+            <div class="element-icon">{{ element.icon }}</div>
+            <div class="element-name">{{ element.name }}</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -170,17 +208,50 @@ const rfidElements = ref<ElementPreset[]>([
   }
 ])
 
+// 条码元素
+const barcodeElements = ref<ElementPreset[]>([
+  {
+    id: 'barcode_basic',
+    name: '条码',
+    icon: '🔢',
+    type: ElementType.BARCODE,
+    defaultConfig: {
+      name: '条码',
+      content: '123456789012',
+      format: 'CODE128',
+      data: '123456789012'
+    }
+  }
+])
+
+// 图片元素
+const imageElements = ref<ElementPreset[]>([
+  {
+    id: 'image_basic',
+    name: '图片',
+    icon: '🖼️',
+    type: ElementType.IMAGE,
+    defaultConfig: {
+      name: '图片',
+      src: '',
+      alt: '图片描述'
+    }
+  }
+])
+
 // 搜索过滤
 const filteredElements = computed(() => {
   if (!searchKeyword.value) {
-    return [...textElements.value, ...shapeElements.value, ...rfidElements.value]
+    return [...textElements.value, ...shapeElements.value, ...rfidElements.value, ...barcodeElements.value, ...imageElements.value]
   }
   
   const keyword = searchKeyword.value.toLowerCase()
   return [
     ...textElements.value.filter(e => e.name.toLowerCase().includes(keyword)),
     ...shapeElements.value.filter(e => e.name.toLowerCase().includes(keyword)),
-    ...rfidElements.value.filter(e => e.name.toLowerCase().includes(keyword))
+    ...rfidElements.value.filter(e => e.name.toLowerCase().includes(keyword)),
+    ...barcodeElements.value.filter(e => e.name.toLowerCase().includes(keyword)),
+    ...imageElements.value.filter(e => e.name.toLowerCase().includes(keyword))
   ]
 })
 

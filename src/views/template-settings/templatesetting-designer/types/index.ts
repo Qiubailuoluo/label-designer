@@ -78,6 +78,13 @@ export interface RfidElement extends BaseElement {
   bgColor: string   // 背景色
 }
 
+// 图片元素
+export interface ImageElement extends BaseElement {
+  type: ElementType.IMAGE
+  src: string
+  alt?: string
+}
+
 // 标题元素（基于文本元素的属性）
 export interface TitleElement extends BaseElement {
   type: ElementType.TITLE
@@ -91,7 +98,7 @@ export interface TitleElement extends BaseElement {
 }
 
 // 元素联合类型
-export type DesignElement = TextElement | TitleElement | RectangleElement | CircleElement | BarcodeElement | QrCodeElement | RfidElement
+export type DesignElement = TextElement | TitleElement | RectangleElement | CircleElement | BarcodeElement | QrCodeElement | RfidElement | ImageElement
 
 // 画布配置
 export interface CanvasConfig {
