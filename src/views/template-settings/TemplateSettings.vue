@@ -85,17 +85,17 @@ const loadTemplates = async () => {
     // 调用真实API获取模板列表
     const response = await apiService.getTemplateList()
     
-    // 根据实际API响应结构调整数据映射
-    if (response && Array.isArray(response.templates)) {
-      templates.value = response.templates.map((template: any) => ({
-        id: template.id,
-        name: template.name,
-        updatedAt: template.updatedAt || template.createdAt || new Date().toISOString(),
-        createdAt: template.createdAt || new Date().toISOString(),
+    // 根据新的API响应结构调整数据映射
+    if (response && response.data && Array.isArray(response.data.list)) {
+      templates.value = response.data.list.map((template: any) => ({
+        id: template.template_id,
+        name: template.template_name,
+        updatedAt: template.create_time,
+        createdAt: template.create_time,
         elements: [], // 实际元素数据需要单独加载
         canvasConfig: {
-          width: template.width || 100,
-          height: template.height || 60,
+          width: 100, // 默认值
+          height: 60, // 默认值
           dpi: 300,
           backgroundColor: '#ffffff',
           gridEnabled: true

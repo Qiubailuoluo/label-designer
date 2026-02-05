@@ -226,13 +226,10 @@ class ApiService {
   }
 
   // 获取模板列表
-  async getTemplateList(category?: string) {
-    const url = category 
-      ? `${this.baseUrl}/templates?category=${category}`
-      : `${this.baseUrl}/templates`
+  async getTemplateList() {
+    const url = `${this.baseUrl}/templates`
 
     console.group('📋 模板列表请求')
-    console.log('🏷️ 分类:', category || '全部')
     console.log('🌐 请求地址:', url)
     console.log('📅 请求时间:', new Date().toISOString())
     console.log('🔐 Token状态:', localStorage.getItem('accessToken') ? '已认证' : '未认证')
