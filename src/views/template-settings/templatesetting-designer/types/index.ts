@@ -1,10 +1,9 @@
 // 元素类型枚举
 export enum ElementType {
   TEXT = 'text',
-  TITLE = 'title',      // 标题类型
   RECTANGLE = 'rectangle',
   CIRCLE = 'circle',
-  LINE = 'line',        // 线条类型
+  LINE = 'line',
   IMAGE = 'image',
   BARCODE = 'barcode',
   QRCODE = 'qrCode',
@@ -23,7 +22,6 @@ export interface BaseElement {
   rotation: number // 旋转角度
   visible: boolean // 是否可见
   zIndex: number   // 层级
-  dataField?: string // 数据字段名（可选）
 }
 
 // 文本元素
@@ -97,20 +95,8 @@ export interface ImageElement extends BaseElement {
   alt?: string
 }
 
-// 标题元素（基于文本元素的属性）
-export interface TitleElement extends BaseElement {
-  type: ElementType.TITLE
-  content: string
-  fontSize: number
-  fontFamily: string
-  color: string
-  textAlign: 'left' | 'center' | 'right'
-  bold: boolean
-  italic: boolean
-}
-
 // 元素联合类型
-export type DesignElement = TextElement | TitleElement | RectangleElement | CircleElement | LineElement | BarcodeElement | QrCodeElement | RfidElement | ImageElement
+export type DesignElement = TextElement | RectangleElement | CircleElement | LineElement | BarcodeElement | QrCodeElement | RfidElement | ImageElement
 
 // 画布配置
 export interface CanvasConfig {
@@ -130,54 +116,25 @@ export interface ElementPreset {
   defaultConfig: Partial<DesignElement>
 }
 
-// 数据字段定义
-export interface DataFieldDefinition {
-  type: 'string' | 'number' | 'date' | 'barcode' | 'rfid'
-  default?: any
-  validation?: {
-    required?: boolean
-    maxLength?: number
-    pattern?: string
-  }
-  source?: 'database' | 'input' | 'system' | 'rfid_reader'
-}
-
-// 模板配置
-export interface TemplateConfig {
-  canvas: {
-    width: number
-    height: number
-    dpi: number
-    backgroundColor: string
-    unit: 'mm'
-  }
-  elements: DesignElement[]
-  dataFields?: Record<string, DataFieldDefinition>
-  printer?: {
-    model?: string
-    density?: number
-    speed?: number
-  }
-  metadata?: {
-    version: string
-    description?: string
-  }
+// 模板元素接口（用于API通信）
+export interface TemplateElement {
+  id: string
+  type: string
+  x: number
+  y: number
+  width: number
+  height: number
+  rotation: number
+  zIndex: number
 }
 
 // 模板保存请求
 export interface TemplateSaveRequest {
-  template: {
-    id?: string
-    name: string
-    description?: string
-    width: number
-    height: number
-    dpi: number
-    category?: string
-    config: TemplateConfig
-  }
-  options?: {
-    overwrite?: boolean
-    generatePreview?: boolean
-  }
+  id?: string
+  name: string
+  description?: string
+  width: number
+  height: number
+  elements: TemplateElement[]
+  category?: string
 }

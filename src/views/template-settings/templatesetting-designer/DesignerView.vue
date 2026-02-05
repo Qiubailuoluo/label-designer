@@ -17,7 +17,7 @@
       
       <!-- 中间画布区域 -->
       <div class="canvas-container">
-        <Canvas
+        <CanvasComponent
           ref="canvasRef"
           :config="canvasConfig"
           :elements="elements"
@@ -47,7 +47,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DesignerToolbar from './components/Toolbar.vue'
 import ElementsPanel from './components/ElementsPanel.vue'
-import Canvas from './components/Canvas.vue'
+import CanvasComponent from './components/Canvas.vue'
 import PropertiesPanel from './components/PropertiesPanel.vue'
 import type { CanvasConfig, DesignElement } from './types'
 import type { TemplateSaveRequest, TemplateElement } from './services/types.ts'
@@ -77,7 +77,7 @@ const elements = ref<DesignElement[]>([])
 const selectedElement = ref<DesignElement | null>(null)
 
 // 画布引用
-const canvasRef = ref<InstanceType<typeof Canvas> | null>(null)
+const canvasRef = ref<InstanceType<typeof CanvasComponent> | null>(null)
 
 // 处理配置更新
 const handleConfigUpdate = (config: Partial<CanvasConfig>) => {
@@ -163,16 +163,8 @@ const handleElementDelete = (elementId: string) => {
 
 // 保存设计
 const handleSave = async () => {
-  console.group('💾 开始保存模板操作')
-  console.log('📝 当前模板信息:')
-  console.log('  🆔 ID:', templateId.value)
-  console.log('  📝 名称:', templateName.value)
-  console.log('  📐 画布配置:', canvasConfig.value)
-  console.log('  🔤 元素数量:', elements.value.length)
-  console.log('  🕐 创建时间:', new Date().toISOString())
-  
   try {
-    // 准备设计数据 - 按照services/types.ts中TemplateSaveRequest接口要求的结构
+    // 准备设计数据
     const saveRequest: TemplateSaveRequest = {
       id: templateId.value || undefined,
       name: templateName.value,
@@ -181,7 +173,7 @@ const handleSave = async () => {
       height: canvasConfig.value.height,
       elements: elements.value.map(element => ({
         id: element.id,
-        type: element.type as any, // 类型转换以解决枚举不匹配问题
+        type: element.type as any,
         x: element.x,
         y: element.y,
         width: element.width,
@@ -192,27 +184,17 @@ const handleSave = async () => {
       category: 'rfid_label'
     }
     
-    console.log('📦 准备保存的数据:', saveRequest)
-    console.log('💾 数据大小估算:', JSON.stringify(saveRequest).length, '字符')
-    
     // 调用后端API保存模板
-    console.log('🚀 开始调用后端API保存...')
     const response = await apiService.saveTemplate(saveRequest)
-    
-    console.log('✅ 后端保存成功')
-    console.log('📥 后端响应:', response)
     
     // 保存成功提示
     alert('保存成功！')
-    console.log('🎉 保存操作完成')
     
     // 返回模板设置页面
     handleBack()
   } catch (error) {
-    console.error('💥 保存失败:', error)
+    console.error('保存失败:', error)
     alert('保存失败，请重试')
-  } finally {
-    console.groupEnd()
   }
 }
 
@@ -226,36 +208,20 @@ const handleBack = () => {
   router.push('/template-settings')
 }
 
-// 添加加载状态标记，防止重复加载
-let isLoadingTemplate = false
-
 // 加载模板数据
 const loadTemplateData = async () => {
-  // 防止重复加载
-  if (isLoadingTemplate) {
-    console.log('🔄 模板数据正在加载中，跳过重复请求')
-    return
-  }
-  
   // 如果没有模板ID，初始化为空白模板（创建模式）
   if (!templateId.value) {
-    console.log('🆕 初始化空白模板（创建模式）')
-    
-    // 重置所有状态
     resetDesignerState()
     return
   }
   
   try {
-    isLoadingTemplate = true
-    console.log('📥 开始加载模板数据:', templateId.value)
-    
     // 调用真实API加载模板
     const response = await apiService.loadTemplate(templateId.value)
     
-    // 健壮性检查：确保响应数据结构正确
+    // 健壮性检查
     if (!response || !response.data) {
-      console.error('❌ 响应数据为空或格式不正确:', response)
       alert('加载模板数据失败：响应数据格式不正确')
       return
     }
@@ -263,9 +229,6 @@ const loadTemplateData = async () => {
     // 重置设计器状态
     resetDesignerState()
     
-    // 根据后端实际返回的数据格式处理
-    // 后端返回: response.data = { id, name, width, height, config, ... }
-    // 而不是: response.data.template = { ... }
     const templateData = response.data
     
     // 设置模板基本信息
@@ -284,10 +247,10 @@ const loadTemplateData = async () => {
     const elementsArray = templateData.config?.elements || []
     if (Array.isArray(elementsArray)) {
       elements.value = elementsArray.map((element: any) => {
-        // 类型映射：处理后端返回的不同类型标识
+        // 类型映射
         let mappedType = element.type
         if (element.type === 'title') {
-          mappedType = 'text' // 将title映射为text类型
+          mappedType = 'text'
         }
         
         const baseElement = {
@@ -352,16 +315,8 @@ const loadTemplateData = async () => {
         }
       }) as DesignElement[]
     } else {
-      console.warn('⚠️ 元素数据不是数组格式，使用空数组:', elementsArray)
       elements.value = []
     }
-    
-    console.log('✅ 模板数据加载成功:', {
-      name: templateName.value,
-      canvas: canvasConfig.value,
-      elementsCount: elements.value.length,
-      elementTypes: elements.value.map(e => e.type)
-    })
     
     // 通知画布更新配置和元素
     if (canvasRef.value) {
@@ -375,15 +330,8 @@ const loadTemplateData = async () => {
       }, 100)
     }
   } catch (error) {
-    console.error('💥 加载模板数据失败:', error)
-    // 显示更友好的错误信息
-    if (error instanceof TypeError && error.message.includes('Cannot read properties of undefined')) {
-      alert('加载模板数据失败：后端返回的数据格式不正确，请检查后端接口实现')
-    } else {
-      alert('加载模板数据失败，请稍后重试')
-    }
-  } finally {
-    isLoadingTemplate = false
+    console.error('加载模板数据失败:', error)
+    alert('加载模板数据失败，请稍后重试')
   }
 }
 
@@ -405,8 +353,6 @@ const resetDesignerState = () => {
   if (canvasRef.value) {
     canvasRef.value.clearCanvas()
   }
-  
-  console.log('🧹 设计器状态已重置')
 }
 
 // 页面离开前提示保存
@@ -428,11 +374,10 @@ onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 
-// 监听路由变化 - 添加防抖和状态检查
+// 监听路由变化
 watch(() => route.params.id, (newId, oldId) => {
   // 只有当ID真正改变时才重新加载
   if (newId !== oldId) {
-    console.log('🔄 路由参数变化:', { from: oldId, to: newId })
     loadTemplateData()
   }
 }, { immediate: true })

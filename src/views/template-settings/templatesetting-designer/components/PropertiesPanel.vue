@@ -22,18 +22,6 @@
               @change="updateElement"
             />
           </div>
-
-          <!-- 数据字段（仅对动态元素） -->
-          <div v-if="supportsDataField" class="property-row">
-            <label>数据字段</label>
-            <input
-              v-model="(localElement as any).dataField"
-              type="text"
-              class="property-input"
-              placeholder="字段名"
-              @change="updateElement"
-            />
-          </div>
           
           <div class="property-row">
             <label>位置 X</label>
@@ -91,8 +79,6 @@
             />
             <span class="unit">°</span>
           </div>
-          
-          
         </div>
       </div>
       
@@ -332,65 +318,6 @@
               <option value="PDF417">PDF417</option>
             </select>
           </div>
-          
-          <!-- 数据字段（仅对动态元素） -->
-          <div v-if="supportsDataField" class="property-row">
-            <label>数据字段</label>
-            <input
-              v-model="(localElement as any).dataField"
-              type="text"
-              class="property-input"
-              placeholder="字段名"
-              @change="updateElement"
-            />
-          </div>
-        </div>
-      </div>
-      
-      <!-- 图片属性 -->
-      <div v-if="localElement.type === 'image'" class="property-section">
-        <div class="section-header">
-          <span class="section-title">图片属性</span>
-        </div>
-        
-        <div class="property-group">
-          <div class="property-row">
-            <label>图片源</label>
-            <div class="image-upload-container">
-              <input
-                type="file"
-                accept="image/*"
-                @change="handleImageUpload"
-                class="image-upload-input"
-                ref="imageInputRef"
-              />
-              <button class="upload-btn" @click="triggerImageUpload">选择图片</button>
-              <span v-if="(localElement as any).src" class="current-image">{{ getFileName((localElement as any).src) }}</span>
-              <span v-else class="current-image">未选择图片</span>
-            </div>
-          </div>
-          
-          <div class="property-row">
-            <label>替代文本</label>
-            <input
-              v-model="(localElement as any).alt"
-              type="text"
-              class="property-input"
-              @change="updateElement"
-            />
-          </div>
-          
-          <!-- 数据字段（仅对动态元素） -->
-          <div v-if="supportsDataField" class="property-row">
-            <label>数据字段</label>
-            <input
-              v-model="(localElement as any).dataField"
-              type="text"
-              class="property-input"
-              placeholder="字段名"
-              @change="updateElement"
-            />
-          </div>
         </div>
       </div>
       
@@ -407,7 +334,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import type { DesignElement } from '../types'
 import { ElementType } from '../types'
 
@@ -425,16 +352,6 @@ const emit = defineEmits<Emits>()
 
 // 本地元素副本（用于双向绑定）
 const localElement = ref({ ...props.element })
-
-// 文件输入引用
-const imageInputRef = ref<HTMLInputElement | null>(null)
-
-// 计算是否支持数据字段
-const supportsDataField = computed(() => {
-  return localElement.value.type === ElementType.TEXT || 
-         localElement.value.type === ElementType.RFID ||
-         localElement.value.type === ElementType.BARCODE
-})
 
 // 监听父组件元素变化
 watch(() => props.element, (newElement) => {
@@ -472,86 +389,8 @@ const handleDelete = () => {
     emit('element-delete', props.element.id)
   }
 }
-
-// 处理图片上传
-const handleImageUpload = (event: Event) => {
-  const input = event.target as HTMLInputElement
-  if (input.files && input.files[0]) {
-    const file = input.files[0]
-    
-    // 验证文件类型
-    if (!file.type.match('image.*')) {
-      alert('请选择图片文件')
-      return
-    }
-    
-    // 创建文件读取器
-    const reader = new FileReader()
-    
-    reader.onload = (e) => {
-      const imageUrl = e.target?.result as string
-      // 更新本地元素的src属性
-      (localElement.value as any).src = imageUrl
-      updateElement()
-    }
-    
-    reader.onerror = () => {
-      alert('图片加载失败')
-    }
-    
-    reader.readAsDataURL(file)
-  }
-}
-
-// 触发图片上传
-const triggerImageUpload = () => {
-  if (imageInputRef.value) {
-    imageInputRef.value.click()
-  }
-}
-
-// 获取文件名
-const getFileName = (url: string): string => {
-  if (url.startsWith('data:')) {
-    return '已上传图片'
-  }
-  return url.split('/').pop() || '未知文件'
-}
 </script>
 
 <style scoped>
 @import '../css/properties-panel.scss';
-
-.image-upload-container {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.image-upload-input {
-  display: none;
-}
-
-.upload-btn {
-  background-color: #4caf50;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.upload-btn:hover {
-  background-color: #45a049;
-}
-
-.current-image {
-  font-size: 12px;
-  color: #666;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 </style>

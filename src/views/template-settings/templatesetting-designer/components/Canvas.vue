@@ -17,12 +17,14 @@ import {
   getElementFromFabricObject 
 } from '../utils/fabric-helper'
 
+// 定义Props接口
 interface Props {
   config: CanvasConfig
   elements: DesignElement[]
 }
 
-interface Emits {
+// 定义Emits接口
+type Emits = {
   (e: 'element-select', elementId: string | null): void
   (e: 'element-update', elementId: string, updates: Partial<DesignElement>): void
 }
@@ -31,8 +33,8 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 // Refs
-const containerRef = ref<HTMLDivElement>()
-const canvasRef = ref<HTMLCanvasElement>()
+const containerRef = ref<HTMLDivElement | null>(null)
+const canvasRef = ref<HTMLCanvasElement | null>(null)
 let fabricCanvas: fabric.Canvas | null = null
 
 // 当前选中的元素ID
@@ -44,60 +46,12 @@ const elementMap = new Map<string, fabric.Object>()
 // 是否正在通过程序更新（避免循环更新）
 let isProgrammaticUpdate = false
 
-// 是否正在批量更新（避免频繁渲染）
-let isBatchUpdating = false
-// 批量更新队列
-let batchUpdateQueue: (() => void)[] = []
-
-// 初始化画布
-const initCanvas = () => {
-  if (!canvasRef.value || !containerRef.value) return
-  
-  // 计算画布尺寸
-  const width = mmToPx(props.config.width, props.config.dpi)
-  const height = mmToPx(props.config.height, props.config.dpi)
-  
-  // 创建fabric画布
-  fabricCanvas = new fabric.Canvas(canvasRef.value, {
-    width,
-    height,
-    backgroundColor: props.config.backgroundColor,
-    selection: true, // 启用选择
-    preserveObjectStacking: true,
-    renderOnAddRemove: true,
-    stopContextMenu: true,
-    fireRightClick: true
-  })
-  
-  // 设置容器尺寸
-  if (containerRef.value) {
-    containerRef.value.style.width = `${width}px`
-    containerRef.value.style.height = `${height}px`
-  }
-  
-  // 监听对象选中事件
-  fabricCanvas.on('selection:created', handleSelectionCreated)
-  fabricCanvas.on('selection:updated', handleSelectionUpdated)
-  fabricCanvas.on('selection:cleared', handleSelectionCleared)
-  
-  // 监听对象修改事件
-  fabricCanvas.on('object:modified', handleObjectModified)
-  
-  // 监听鼠标移动（用于显示坐标）
-  fabricCanvas.on('mouse:move', handleMouseMove)
-  
-  // 监听鼠标按下（用于点击空白处取消选择）
-  fabricCanvas.on('mouse:down', handleMouseDown)
-  
-  // 渲染所有元素
-  renderAllElements()
-}
-
 // 处理对象选中
 const handleSelectionCreated = (e: any) => {
   if (e.selected && e.selected[0]) {
     const object = e.selected[0]
     selectedElementId = object.get('elementId') || null
+    console.log('✅ 选中元素:', selectedElementId, '类型:', object.get('type'))
     emit('element-select', selectedElementId)
   }
 }
@@ -106,28 +60,15 @@ const handleSelectionUpdated = (e: any) => {
   if (e.selected && e.selected[0]) {
     const object = e.selected[0]
     selectedElementId = object.get('elementId') || null
+    console.log('🔄 更新选中元素:', selectedElementId, '类型:', object.get('type'))
     emit('element-select', selectedElementId)
   }
 }
 
 const handleSelectionCleared = () => {
+  console.log('❌ 取消选择')
   selectedElementId = null
   emit('element-select', null)
-}
-
-// 处理鼠标移动
-const handleMouseMove = (e: any) => {
-  // 可以在这里显示鼠标坐标
-  // console.log('Mouse at:', e.pointer.x, e.pointer.y)
-}
-
-// 处理鼠标按下
-const handleMouseDown = (e: any) => {
-  // 如果点击在空白处，清除选择
-  if (!e.target && fabricCanvas) {
-    fabricCanvas.discardActiveObject()
-    fabricCanvas.requestRenderAll()
-  }
 }
 
 // 处理对象修改（位置、大小、旋转等变化）
@@ -181,22 +122,15 @@ const addElementToCanvas = (element: DesignElement) => {
   // 存储到映射
   elementMap.set(element.id, fabricObject)
   
-  // 批量添加到画布
-  if (isBatchUpdating) {
-    batchUpdateQueue.push(() => {
-      fabricCanvas?.add(fabricObject)
-    })
-  } else {
-    fabricCanvas.add(fabricObject)
-    fabricCanvas.renderAll()
-  }
+  fabricCanvas.add(fabricObject)
+  fabricCanvas.renderAll()
 }
 
 // 更新画布上的元素（不重新创建）
 const updateElementOnCanvas = (element: DesignElement) => {
   if (!fabricCanvas) return
   
-  // 标记为程序更新，避免触发object:modified事件循环
+  // 标记为程序更新
   isProgrammaticUpdate = true
   
   const existingObject = elementMap.get(element.id)
@@ -208,13 +142,11 @@ const updateElementOnCanvas = (element: DesignElement) => {
     // 如果这个元素当前被选中，保持选中状态
     const activeObject = fabricCanvas.getActiveObject()
     if (activeObject && activeObject.get('elementId') === element.id) {
-      // 重新设置活动对象，触发重新渲染
+      // 重新设置活动对象
       fabricCanvas.setActiveObject(existingObject)
     }
     
-    if (!isBatchUpdating) {
-      fabricCanvas.requestRenderAll()
-    }
+    fabricCanvas.requestRenderAll()
   } else {
     // 如果不存在，添加新对象
     addElementToCanvas(element)
@@ -246,14 +178,10 @@ const removeElementFromCanvas = (elementId: string) => {
 // 清空画布所有元素
 const clearCanvas = () => {
   if (fabricCanvas) {
-    // 批量清除
-    isBatchUpdating = true
     fabricCanvas.clear()
     elementMap.clear()
     selectedElementId = null
     emit('element-select', null)
-    isBatchUpdating = false
-    
     console.log('🧹 画布已清空')
   }
 }
@@ -303,99 +231,52 @@ const addElement = (element: DesignElement) => {
 }
 
 // 更新元素（供父组件调用）
-const updateElement = (elementId: string, element: DesignElement) => {
+const updateElement = (element: DesignElement) => {
   updateElementOnCanvas(element)
 }
 
-// 移除元素（供父组件调用）
+// 删除元素（供父组件调用）
 const removeElement = (elementId: string) => {
   removeElementFromCanvas(elementId)
 }
 
-// 执行批量更新
-const executeBatchUpdates = () => {
-  if (batchUpdateQueue.length === 0) return
+// 初始化画布
+const initCanvas = () => {
+  if (!canvasRef.value || !containerRef.value) return
   
-  isBatchUpdating = true
-  const updates = [...batchUpdateQueue]
-  batchUpdateQueue = []
+  // 计算画布尺寸
+  const width = mmToPx(props.config.width, props.config.dpi)
+  const height = mmToPx(props.config.height, props.config.dpi)
   
-  try {
-    updates.forEach(updateFn => updateFn())
-    if (fabricCanvas) {
-      fabricCanvas.renderAll()
-    }
-  } finally {
-    isBatchUpdating = false
-  }
-}
-
-// 监听元素变化 - 优化版本
-watch(() => props.elements, (newElements, oldElements) => {
-  if (!fabricCanvas || isProgrammaticUpdate) return
-  
-  console.log('🔄 元素列表变化:', {
-    oldCount: oldElements.length,
-    newCount: newElements.length,
-    added: newElements.filter(ne => !oldElements.some(oe => oe.id === ne.id)).map(e => e.id),
-    removed: oldElements.filter(oe => !newElements.some(ne => ne.id === oe.id)).map(e => e.id)
+  // 创建fabric画布
+  fabricCanvas = new fabric.Canvas(canvasRef.value, {
+    width,
+    height,
+    backgroundColor: props.config.backgroundColor,
+    selection: true,
+    preserveObjectStacking: true,
+    renderOnAddRemove: true,
+    stopContextMenu: true,
+    fireRightClick: true
   })
   
-  // 开始批量更新
-  isBatchUpdating = true
-  batchUpdateQueue = []
-  
-  try {
-    // 比较新旧元素，找出需要添加、更新、删除的元素
-    const newIds = new Set(newElements.map(e => e.id))
-    const oldIds = new Set(oldElements.map(e => e.id))
-    
-    // 找出需要删除的元素
-    const toRemove = [...oldIds].filter(id => !newIds.has(id))
-    toRemove.forEach(id => {
-      const fabricObject = elementMap.get(id)
-      if (fabricObject) {
-        batchUpdateQueue.push(() => {
-          fabricCanvas?.remove(fabricObject)
-        })
-        elementMap.delete(id)
-        
-        // 如果删除的是当前选中的元素，清空选中状态
-        if (selectedElementId === id) {
-          selectedElementId = null
-        }
-      }
-    })
-    
-    // 找出需要添加或更新的元素
-    newElements.forEach(element => {
-      if (oldIds.has(element.id)) {
-        // 更新现有元素
-        updateElementOnCanvas(element)
-      } else {
-        // 添加新元素
-        addElementToCanvas(element)
-      }
-    })
-    
-    // 执行批量更新
-    executeBatchUpdates()
-    
-    // 更新选中状态
-    if (selectedElementId && !newIds.has(selectedElementId)) {
-      selectedElementId = null
-      emit('element-select', null)
-    }
-    
-  } finally {
-    isBatchUpdating = false
+  // 设置容器尺寸
+  if (containerRef.value) {
+    containerRef.value.style.width = `${width}px`
+    containerRef.value.style.height = `${height}px`
   }
-}, { deep: true })
-
-// 监听配置变化
-watch(() => props.config, (newConfig) => {
-  updateConfig(newConfig)
-}, { deep: true })
+  
+  // 监听对象选中事件
+  fabricCanvas.on('selection:created', handleSelectionCreated)
+  fabricCanvas.on('selection:updated', handleSelectionUpdated)
+  fabricCanvas.on('selection:cleared', handleSelectionCleared)
+  
+  // 监听对象修改事件
+  fabricCanvas.on('object:modified', handleObjectModified)
+  
+  // 渲染所有元素
+  renderAllElements()
+}
 
 // 生命周期
 onMounted(() => {
@@ -427,20 +308,15 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f0f0f0;
-  border-radius: 4px;
-  overflow: auto;
-  position: relative;
 }
 
 .canvas-container {
-  background-color: white;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   position: relative;
+  overflow: auto;
 }
 
 .main-canvas {
-  display: block;
-  cursor: default;
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
 }
 </style>

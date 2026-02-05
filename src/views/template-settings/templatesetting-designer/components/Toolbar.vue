@@ -15,24 +15,6 @@
           placeholder="输入模板名称"
           @change="handleNameChange"
         />
-        <input
-          v-model="localDescription"
-          type="text"
-          class="template-description"
-          placeholder="模板描述"
-          @change="handleDescriptionChange"
-        />
-        <select
-          v-model="localCategory"
-          class="template-category"
-          @change="handleCategoryChange"
-        >
-          <option value="">选择分类</option>
-          <option value="product_labeling">产品标签</option>
-          <option value="warehouse">仓库管理</option>
-          <option value="logistics">物流运输</option>
-          <option value="asset">资产管理</option>
-        </select>
       </div>
     </div>
     
@@ -92,8 +74,6 @@ import type { CanvasConfig } from '../types'
 interface Props {
   config: CanvasConfig
   templateName: string
-  templateDescription?: string
-  templateCategory?: string
 }
 
 interface Emits {
@@ -101,8 +81,6 @@ interface Emits {
   (e: 'save'): void
   (e: 'back'): void
   (e: 'name-change', name: string): void
-  (e: 'description-change', description: string): void
-  (e: 'category-change', category: string): void
 }
 
 const props = defineProps<Props>()
@@ -119,8 +97,6 @@ const localConfig = ref({
 
 // 本地模板信息副本
 const localName = ref(props.templateName)
-const localDescription = ref(props.templateDescription || '')
-const localCategory = ref(props.templateCategory || '')
 
 // 监听父组件配置变化
 watch(() => props.config, (newConfig) => {
@@ -139,14 +115,6 @@ watch(() => props.templateName, (newName) => {
   localName.value = newName
 }, { immediate: true })
 
-watch(() => props.templateDescription, (newDescription) => {
-  localDescription.value = newDescription || ''
-}, { immediate: true })
-
-watch(() => props.templateCategory, (newCategory) => {
-  localCategory.value = newCategory || ''
-}, { immediate: true })
-
 // 更新配置
 const updateConfig = () => {
   emit('config-update', localConfig.value)
@@ -157,15 +125,6 @@ const handleNameChange = () => {
   emit('name-change', localName.value)
 }
 
-// 描述变化
-const handleDescriptionChange = () => {
-  emit('description-change', localDescription.value)
-}
-
-// 分类变化
-const handleCategoryChange = () => {
-  emit('category-change', localCategory.value)
-}
 
 // 保存
 const handleSave = () => {

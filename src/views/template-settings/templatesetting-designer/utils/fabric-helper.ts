@@ -115,7 +115,7 @@ export const createBarcodeElement = (config: any): fabric.Group => {
       width: width,
       height: barcodeHeight,
       fill: isBlack ? '#000000' : '#ffffff',
-      selectable: false, // 子元素不可选，避免点击问题
+      selectable: false, // 子元素不可选
       hasControls: false,
       hasBorders: false,
       originX: 'left',
@@ -144,6 +144,11 @@ export const createBarcodeElement = (config: any): fabric.Group => {
     cornerSize: 8,
     transparentCorners: false
   })
+  
+  // 确保组的渲染正确
+  barcodeGroup.selectable = true
+  barcodeGroup.hasControls = true
+  barcodeGroup.hasBorders = true
   
   barcodeGroup.set('elementId', config.id)
   barcodeGroup.set('type', ElementType.BARCODE)
@@ -290,6 +295,11 @@ export const createImageElement = (config: any): fabric.Image => {
     transparentCorners: false
   })
 
+  // 确保图片元素的渲染正确
+  image.selectable = true
+  image.hasControls = true
+  image.hasBorders = true
+
   // 存储元素ID和类型
   image.set('elementId', config.id)
   image.set('type', ElementType.IMAGE)
@@ -299,11 +309,23 @@ export const createImageElement = (config: any): fabric.Image => {
 
 // 创建线条元素
 export const createLineElement = (config: any): fabric.Line => {
+  // 计算线条的起始点和终点坐标（基于相对位置）
+  const startX = mmToPx(config.x || 0)
+  const startY = mmToPx(config.y || 0)
+  
+  // 线条的长度和角度
+  const length = mmToPx(config.width || 50)
+  const angle = config.rotation || 0
+  
+  // 计算终点坐标（使用三角函数）
+  const endX = startX + length * Math.cos(angle * Math.PI / 180)
+  const endY = startY + length * Math.sin(angle * Math.PI / 180)
+  
   const line = new fabric.Line([
-    mmToPx(config.x1 || 0),
-    mmToPx(config.y1 || 0),
-    mmToPx(config.x2 || 50),
-    mmToPx(config.y2 || 0)
+    startX,
+    startY,
+    endX,
+    endY
   ], {
     stroke: config.stroke || '#000000',
     strokeWidth: config.strokeWidth || 1,
@@ -402,11 +424,20 @@ export const updateFabricObject = (obj: fabric.Object, element: DesignElement, d
     case ElementType.LINE:
       if (obj instanceof fabric.Line) {
         const lineElement = element as any
+        // 计算基于旋转角度的终点坐标
+        const startX = mmToPx(lineElement.x, dpi)
+        const startY = mmToPx(lineElement.y, dpi)
+        const length = mmToPx(lineElement.width, dpi)
+        const angle = lineElement.rotation || 0
+        
+        const endX = startX + length * Math.cos(angle * Math.PI / 180)
+        const endY = startY + length * Math.sin(angle * Math.PI / 180)
+        
         obj.set({
-          x1: mmToPx(lineElement.x1, dpi),
-          y1: mmToPx(lineElement.y1, dpi),
-          x2: mmToPx(lineElement.x2, dpi),
-          y2: mmToPx(lineElement.y2, dpi),
+          x1: startX,
+          y1: startY,
+          x2: endX,
+          y2: endY,
           stroke: lineElement.stroke || '#000000',
           strokeWidth: lineElement.strokeWidth || 1
         })
@@ -586,13 +617,25 @@ export const getElementFromFabricObject = (obj: fabric.Object, dpi: number = 300
       
     case ElementType.LINE:
       if (obj instanceof fabric.Line) {
+        // 计算线条的起始点和长度
+        const startX = pxToMm(obj.x1, dpi)
+        const startY = pxToMm(obj.y1, dpi)
+        const endX = pxToMm(obj.x2, dpi)
+        const endY = pxToMm(obj.y2, dpi)
+        
+        // 计算长度和角度
+        const dx = endX - startX
+        const dy = endY - startY
+        const length = Math.sqrt(dx * dx + dy * dy)
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI
+        
         Object.assign(updates, {
           stroke: obj.stroke,
           strokeWidth: obj.strokeWidth,
-          x1: pxToMm(obj.x1, dpi),
-          y1: pxToMm(obj.y1, dpi),
-          x2: pxToMm(obj.x2, dpi),
-          y2: pxToMm(obj.y2, dpi)
+          x: startX,
+          y: startY,
+          width: length,
+          rotation: angle
         })
       }
       break
