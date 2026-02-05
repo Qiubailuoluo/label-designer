@@ -115,7 +115,7 @@ export const createBarcodeElement = (config: any): fabric.Group => {
       width: width,
       height: barcodeHeight,
       fill: isBlack ? '#000000' : '#ffffff',
-      selectable: false,
+      selectable: false, // 子元素不可选，避免点击问题
       hasControls: false,
       hasBorders: false,
       originX: 'left',
@@ -130,7 +130,7 @@ export const createBarcodeElement = (config: any): fabric.Group => {
   const barcodeGroup = new fabric.Group(bars, {
     left: mmToPx(config.x || 0),
     top: mmToPx(config.y || 0),
-    selectable: true,
+    selectable: true, // 组本身可选
     hasControls: true,
     hasBorders: true,
     originX: 'left',
@@ -297,6 +297,38 @@ export const createImageElement = (config: any): fabric.Image => {
   return image
 }
 
+// 创建线条元素
+export const createLineElement = (config: any): fabric.Line => {
+  const line = new fabric.Line([
+    mmToPx(config.x1 || 0),
+    mmToPx(config.y1 || 0),
+    mmToPx(config.x2 || 50),
+    mmToPx(config.y2 || 0)
+  ], {
+    stroke: config.stroke || '#000000',
+    strokeWidth: config.strokeWidth || 1,
+    selectable: true,
+    hasControls: true,
+    hasBorders: true,
+    originX: 'left',
+    originY: 'top',
+    lockUniScaling: false, // 允许自由缩放
+    lockScalingFlip: true, // 禁止翻转
+    lockMovementX: false,
+    lockMovementY: false,
+    lockRotation: false,
+    cornerStyle: 'circle',
+    cornerColor: '#2196f3',
+    cornerSize: 8,
+    transparentCorners: false
+  })
+
+  line.set('elementId', config.id)
+  line.set('type', ElementType.LINE)
+
+  return line
+}
+
 // 根据元素类型创建fabric对象
 export const createFabricObject = (element: DesignElement, dpi: number = 300): fabric.Object => {
   const elementWithDpi = { ...element, dpi };
@@ -306,6 +338,8 @@ export const createFabricObject = (element: DesignElement, dpi: number = 300): f
       return createTextElement(elementWithDpi)
     case ElementType.RECTANGLE:
       return createRectElement(elementWithDpi)
+    case ElementType.LINE:
+      return createLineElement(elementWithDpi)
     case ElementType.BARCODE:
       return createBarcodeElement(elementWithDpi)
     case ElementType.QRCODE:
@@ -365,8 +399,22 @@ export const updateFabricObject = (obj: fabric.Object, element: DesignElement, d
       }
       break
       
+    case ElementType.LINE:
+      if (obj instanceof fabric.Line) {
+        const lineElement = element as any
+        obj.set({
+          x1: mmToPx(lineElement.x1, dpi),
+          y1: mmToPx(lineElement.y1, dpi),
+          x2: mmToPx(lineElement.x2, dpi),
+          y2: mmToPx(lineElement.y2, dpi),
+          stroke: lineElement.stroke || '#000000',
+          strokeWidth: lineElement.strokeWidth || 1
+        })
+      }
+      break
+      
     case ElementType.BARCODE:
-      // 条码元素是组，需要特殊处理
+      // 条码元素是组
       if (obj instanceof fabric.Group) {
         const barcodeElement = element as any
         // 更新基础尺寸
@@ -536,10 +584,23 @@ export const getElementFromFabricObject = (obj: fabric.Object, dpi: number = 300
       }
       break
       
+    case ElementType.LINE:
+      if (obj instanceof fabric.Line) {
+        Object.assign(updates, {
+          stroke: obj.stroke,
+          strokeWidth: obj.strokeWidth,
+          x1: pxToMm(obj.x1, dpi),
+          y1: pxToMm(obj.y1, dpi),
+          x2: pxToMm(obj.x2, dpi),
+          y2: pxToMm(obj.y2, dpi)
+        })
+      }
+      break
+      
     case ElementType.BARCODE:
       // 条码元素是组，需要特殊处理
       if (obj instanceof fabric.Group) {
-        // 简单的条码内容提取（实际应用中可能需要更复杂的逻辑）
+        // 简单的条码内容提取
         Object.assign(updates, {
           content: '123456789012', // 默认值，实际应该从配置中获取
           format: 'CODE128' // 默认格式

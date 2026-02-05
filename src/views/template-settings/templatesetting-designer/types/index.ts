@@ -4,6 +4,7 @@ export enum ElementType {
   TITLE = 'title',      // 标题类型
   RECTANGLE = 'rectangle',
   CIRCLE = 'circle',
+  LINE = 'line',        // 线条类型
   IMAGE = 'image',
   BARCODE = 'barcode',
   QRCODE = 'qrCode',
@@ -46,36 +47,47 @@ export interface RectangleElement extends BaseElement {
   cornerRadius: number // 圆角半径
 }
 
+// 线条元素
+export interface LineElement extends BaseElement {
+  type: ElementType.LINE
+  stroke: string    // 线条颜色
+  strokeWidth: number // 线条宽度
+  x1: number        // 起点X (mm)
+  y1: number        // 起点Y (mm)
+  x2: number        // 终点X (mm)
+  y2: number        // 终点Y (mm)
+}
+
 // 条形码元素
 export interface BarcodeElement extends BaseElement {
   type: ElementType.BARCODE
-  content: string   // 条码内容
-  format: string    // 条码格式
-  data?: string     // 兼容旧数据格式
+  content: string
+  format: string
+  data?: string
 }
 
 // 二维码元素
 export interface QrCodeElement extends BaseElement {
   type: ElementType.QRCODE
-  content: string   // 二维码内容
+  content: string
 }
 
 // 圆形元素
 export interface CircleElement extends BaseElement {
   type: ElementType.CIRCLE
-  fillColor: string      // 填充色
-  strokeColor: string    // 边框色
-  strokeWidth: number    // 边框宽度
+  fillColor: string
+  strokeColor: string
+  strokeWidth: number
 }
 
 // RFID元素
 export interface RfidElement extends BaseElement {
   type: ElementType.RFID
-  tid: string       // TID值
-  showLabel: boolean // 显示标签
-  label: string     // 标签文本
-  textColor: string // 文本颜色
-  bgColor: string   // 背景色
+  tid: string
+  showLabel: boolean
+  label: string
+  textColor: string
+  bgColor: string
 }
 
 // 图片元素
@@ -98,7 +110,7 @@ export interface TitleElement extends BaseElement {
 }
 
 // 元素联合类型
-export type DesignElement = TextElement | TitleElement | RectangleElement | CircleElement | BarcodeElement | QrCodeElement | RfidElement | ImageElement
+export type DesignElement = TextElement | TitleElement | RectangleElement | CircleElement | LineElement | BarcodeElement | QrCodeElement | RfidElement | ImageElement
 
 // 画布配置
 export interface CanvasConfig {

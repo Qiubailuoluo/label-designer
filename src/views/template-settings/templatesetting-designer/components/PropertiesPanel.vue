@@ -362,9 +362,11 @@
                 accept="image/*"
                 @change="handleImageUpload"
                 class="image-upload-input"
+                ref="imageInputRef"
               />
-              <button class="upload-btn">选择图片</button>
-              <span v-if="(localElement as any).src" class="current-image">{{ (localElement as any).src }}</span>
+              <button class="upload-btn" @click="triggerImageUpload">选择图片</button>
+              <span v-if="(localElement as any).src" class="current-image">{{ getFileName((localElement as any).src) }}</span>
+              <span v-else class="current-image">未选择图片</span>
             </div>
           </div>
           
@@ -424,6 +426,9 @@ const emit = defineEmits<Emits>()
 // 本地元素副本（用于双向绑定）
 const localElement = ref({ ...props.element })
 
+// 文件输入引用
+const imageInputRef = ref<HTMLInputElement | null>(null)
+
 // 计算是否支持数据字段
 const supportsDataField = computed(() => {
   return localElement.value.type === ElementType.TEXT || 
@@ -474,6 +479,12 @@ const handleImageUpload = (event: Event) => {
   if (input.files && input.files[0]) {
     const file = input.files[0]
     
+    // 验证文件类型
+    if (!file.type.match('image.*')) {
+      alert('请选择图片文件')
+      return
+    }
+    
     // 创建文件读取器
     const reader = new FileReader()
     
@@ -484,8 +495,27 @@ const handleImageUpload = (event: Event) => {
       updateElement()
     }
     
+    reader.onerror = () => {
+      alert('图片加载失败')
+    }
+    
     reader.readAsDataURL(file)
   }
+}
+
+// 触发图片上传
+const triggerImageUpload = () => {
+  if (imageInputRef.value) {
+    imageInputRef.value.click()
+  }
+}
+
+// 获取文件名
+const getFileName = (url: string): string => {
+  if (url.startsWith('data:')) {
+    return '已上传图片'
+  }
+  return url.split('/').pop() || '未知文件'
 }
 </script>
 

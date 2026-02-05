@@ -173,6 +173,21 @@ const shapeElements = ref<ElementPreset[]>([
       strokeWidth: 1,
       cornerRadius: 0
     }
+  },
+  {
+    id: 'line',
+    name: '线条',
+    icon: '─',
+    type: ElementType.LINE,
+    defaultConfig: {
+      name: '线条',
+      stroke: '#000000',
+      strokeWidth: 1,
+      x1: 0,
+      y1: 0,
+      x2: 50,
+      y2: 0
+    }
   }
 ])
 
