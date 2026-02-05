@@ -227,28 +227,109 @@ const handleBack = () => {
 }
 
 // 加载模板数据
-const loadTemplateData = () => {
+const loadTemplateData = async () => {
   if (!templateId.value) return
   
   try {
-    const designs = JSON.parse(localStorage.getItem('rfidDesigns') || '[]')
-    const template = designs.find((d: any) => d.id === templateId.value)
+    console.log('📥 开始加载模板数据:', templateId.value)
     
-    if (template) {
-      // 加载模板数据
-      templateName.value = template.name || '新标签设计'
-      canvasConfig.value = {
-        ...canvasConfig.value,
-        ...template.canvasConfig
-      }
-      elements.value = template.elements || []
-      
-      console.log('加载模板数据成功:', template)
+    // 调用真实API加载模板
+    const response = await apiService.loadTemplate(templateId.value)
+    
+    // 健壮性检查：确保响应数据结构正确
+    if (!response || !response.data) {
+      console.error('❌ 响应数据为空或格式不正确:', response)
+      alert('加载模板数据失败：响应数据格式不正确')
+      return
+    }
+    
+    // 根据后端实际返回的数据格式处理
+    // 后端返回: response.data = { id, name, width, height, config, ... }
+    // 而不是: response.data.template = { ... }
+    const templateData = response.data
+    
+    // 设置模板基本信息
+    templateName.value = templateData.name || '新标签设计'
+    
+    // 设置画布配置
+    canvasConfig.value = {
+      width: templateData.width || 100,
+      height: templateData.height || 60,
+      dpi: templateData.config?.canvas?.dpi || 300,
+      backgroundColor: templateData.config?.canvas?.backgroundColor || '#ffffff',
+      gridEnabled: true
+    }
+    
+    // 处理元素数据
+    const elementsArray = templateData.config?.elements || []
+    if (Array.isArray(elementsArray)) {
+      elements.value = elementsArray.map((element: any) => ({
+        id: element.id,
+        type: element.type,
+        name: element.name || element.type || '未命名元素',
+        x: element.x || 0,
+        y: element.y || 0,
+        width: element.width || 50,
+        height: element.height || 20,
+        rotation: element.rotation || 0,
+        opacity: element.opacity !== undefined ? element.opacity : 1,
+        visible: element.visible !== undefined ? element.visible : true,
+        zIndex: element.zIndex || 1,
+        // 根据元素类型添加特定属性
+        ...(element.type === 'text' && {
+          content: element.content || '',
+          fontSize: element.fontSize || 12,
+          fontFamily: element.fontFamily || 'Arial',
+          fontWeight: element.fontWeight || 'normal',
+          color: element.color || '#000000',
+          textAlign: element.textAlign || 'left'
+        }),
+        ...(element.type === 'barcode' && {
+          content: element.data || element.content || '',
+          format: element.format || 'CODE128'
+        }),
+        ...(element.type === 'qrCode' && {
+          content: element.content || ''
+        }),
+        ...(element.type === 'rectangle' && {
+          fillColor: element.fillColor || '#ffffff',
+          strokeColor: element.strokeColor || '#000000',
+          strokeWidth: element.strokeWidth || 1
+        }),
+        ...(element.type === 'circle' && {
+          fillColor: element.fillColor || '#ffffff',
+          strokeColor: element.strokeColor || '#000000',
+          strokeWidth: element.strokeWidth || 1
+        })
+      })) as DesignElement[]
     } else {
-      console.log('未找到模板数据，创建新模板')
+      console.warn('⚠️ 元素数据不是数组格式，使用空数组:', elementsArray)
+      elements.value = []
+    }
+    
+    console.log('✅ 模板数据加载成功:', {
+      name: templateName.value,
+      canvas: canvasConfig.value,
+      elementsCount: elements.value.length
+    })
+    
+    // 通知画布更新配置和元素
+    if (canvasRef.value) {
+      canvasRef.value.updateConfig(canvasConfig.value)
+      // 清空并重新添加所有元素
+      canvasRef.value.clearCanvas()
+      elements.value.forEach(element => {
+        canvasRef.value?.addElement(element)
+      })
     }
   } catch (error) {
-    console.error('加载模板数据失败:', error)
+    console.error('💥 加载模板数据失败:', error)
+    // 显示更友好的错误信息
+    if (error instanceof TypeError && error.message.includes('Cannot read properties of undefined')) {
+      alert('加载模板数据失败：后端返回的数据格式不正确，请检查后端接口实现')
+    } else {
+      alert('加载模板数据失败，请稍后重试')
+    }
   }
 }
 

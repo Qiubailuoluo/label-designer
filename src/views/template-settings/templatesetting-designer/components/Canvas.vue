@@ -206,16 +206,30 @@ const updateElementOnCanvas = (element: DesignElement) => {
   }, 10)
 }
 
-// 移除元素
+// 移除元素的辅助函数
 const removeElementFromCanvas = (elementId: string) => {
-  if (!fabricCanvas) return
-  
-  const objectToRemove = elementMap.get(elementId)
-  
-  if (objectToRemove) {
-    fabricCanvas.remove(objectToRemove)
+  const fabricObject = elementMap.get(elementId)
+  if (fabricObject && fabricCanvas) {
+    fabricCanvas.remove(fabricObject)
     elementMap.delete(elementId)
-    fabricCanvas.renderAll()
+    
+    // 如果删除的是当前选中的元素，清空选中状态
+    if (selectedElementId === elementId) {
+      selectedElementId = null
+      emit('element-select', null)
+    }
+    
+    fabricCanvas.requestRenderAll()
+  }
+}
+
+// 清空画布所有元素
+const clearCanvas = () => {
+  if (fabricCanvas) {
+    fabricCanvas.clear()
+    elementMap.clear()
+    selectedElementId = null
+    emit('element-select', null)
   }
 }
 
@@ -320,7 +334,8 @@ defineExpose({
   updateConfig,
   addElement,
   updateElement,
-  removeElement
+  removeElement,
+  clearCanvas
 })
 </script>
 
