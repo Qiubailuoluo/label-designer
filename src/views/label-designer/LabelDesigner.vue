@@ -197,7 +197,7 @@ async function onSave() {
       customVariableNames: customVariableNames.value,
     })
     alert('保存成功')
-    onBack()
+    // 不自动退出，用户可继续编辑；需切换界面时自行点击返回
   } catch (e) {
     console.error(e)
     alert('保存失败：' + (e instanceof Error ? e.message : String(e)))

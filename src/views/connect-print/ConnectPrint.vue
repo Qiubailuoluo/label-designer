@@ -190,7 +190,7 @@
                     <select
                       :value="variableToColumn[varName] || ''"
                       class="binding-select"
-                      @change="onBindingChange(varName, ($event.target as HTMLSelectElement).value)"
+                      @change="onBindingChangeSelect($event, varName)"
                     >
                       <option value="">— 不绑定 —</option>
                       <option v-for="h in excelHeaders" :key="h" :value="h">{{ h }}</option>
@@ -266,7 +266,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, onBeforeUnmount } from 'vue'
 import * as XLSX from 'xlsx'
 import {
   getTemplateList,
@@ -282,7 +282,22 @@ import {
   isRfidField,
 } from './utils/zpl-generator'
 
+const CONNECT_PRINT_CACHE_KEY = 'connectPrintCache'
+const CACHE_TTL_MS = 4 * 60 * 60 * 1000 // 4 小时
+
 type ConnectionType = 'usb' | 'tcp'
+
+interface ConnectPrintCache {
+  savedAt: number
+  connectionType: ConnectionType
+  config: { usb: { port: string; vendor: string }; tcp: { host: string; port: string; timeout: number } }
+  selectedTemplateId: string
+  variableToColumn: Record<string, string>
+  simulateRowIndex: number
+  excelFileName: string
+  excelHeaders: string[]
+  excelRows: Record<string, string | number>[]
+}
 
 interface PrinterItem {
   id: string
@@ -363,6 +378,11 @@ async function loadTemplateList() {
 
 function onBindingChange(varName: string, columnName: string) {
   variableToColumn[varName] = columnName
+}
+
+function onBindingChangeSelect(e: Event, varName: string) {
+  const value = (e.target as HTMLSelectElement)?.value ?? ''
+  onBindingChange(varName, value)
 }
 
 async function onTemplateChange() {
@@ -469,7 +489,60 @@ function onExcelFileChange(e: Event) {
   input.value = ''
 }
 
-onMounted(loadTemplateList)
+function saveConnectPrintCache() {
+  try {
+    const payload: ConnectPrintCache = {
+      savedAt: Date.now(),
+      connectionType: connectionType.value,
+      config: { usb: { ...config.usb }, tcp: { ...config.tcp } },
+      selectedTemplateId: selectedTemplateId.value,
+      variableToColumn: { ...variableToColumn },
+      simulateRowIndex: simulateRowIndex.value,
+      excelFileName: excelFileName.value,
+      excelHeaders: [...excelHeaders.value],
+      excelRows: excelRows.value.map((r) => ({ ...r })),
+    }
+    localStorage.setItem(CONNECT_PRINT_CACHE_KEY, JSON.stringify(payload))
+  } catch (e) {
+    console.warn('连接打印缓存写入失败', e)
+  }
+}
+
+function loadConnectPrintCache(): ConnectPrintCache | null {
+  try {
+    const raw = localStorage.getItem(CONNECT_PRINT_CACHE_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw) as ConnectPrintCache
+    if (!data.savedAt || Date.now() - data.savedAt > CACHE_TTL_MS) return null
+    return data
+  } catch {
+    return null
+  }
+}
+
+async function initPage() {
+  await loadTemplateList()
+  const cached = loadConnectPrintCache()
+  if (!cached) return
+  connectionType.value = cached.connectionType
+  Object.assign(config.usb, cached.config.usb)
+  Object.assign(config.tcp, cached.config.tcp)
+  selectedTemplateId.value = cached.selectedTemplateId
+  simulateRowIndex.value = cached.simulateRowIndex
+  excelFileName.value = cached.excelFileName || ''
+  excelHeaders.value = cached.excelHeaders?.length ? [...cached.excelHeaders] : []
+  excelRows.value = (cached.excelRows?.length ? cached.excelRows.map((r) => ({ ...r })) : []) as Record<string, string | number>[]
+  if (cached.selectedTemplateId) {
+    await onTemplateChange()
+    Object.keys(variableToColumn).forEach((k) => { variableToColumn[k] = '' })
+    if (cached.variableToColumn && typeof cached.variableToColumn === 'object') {
+      Object.assign(variableToColumn, cached.variableToColumn)
+    }
+  }
+}
+
+onMounted(initPage)
+onBeforeUnmount(saveConnectPrintCache)
 </script>
 
 <style scoped>

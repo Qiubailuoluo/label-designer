@@ -33,6 +33,7 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = null
     localStorage.removeItem('accessToken')
     localStorage.removeItem('userInfo')
+    localStorage.removeItem('connectPrintCache')
   }
   
   // 登录方法（修复后的版本）
