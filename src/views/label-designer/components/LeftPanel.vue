@@ -47,6 +47,7 @@ const layoutTools: { type: ElementType; name: string; icon: string; defaults: Re
   { type: 'ellipse', name: '椭圆', icon: '○', defaults: { name: '椭圆', fill: '#ffffff', stroke: '#000000', strokeWidth: 1 } },
   { type: 'barcode', name: '条码', icon: '▌', defaults: { name: '条码', content: '123456789012', format: 'CODE128' } },
   { type: 'image', name: '图片', icon: '🖼', defaults: { name: '图片', src: '', alt: '' } },
+  { type: 'variable', name: '变量', icon: '📌', defaults: { name: '变量', dataField: 'EPC', label: 'EPC:', sampleValue: '0123456789ABCDEF' } },
 ]
 
 const variables = [
@@ -61,7 +62,7 @@ function addElement(type: ElementType, defaults: Record<string, unknown>) {
     name: (defaults.name as string) || type,
     x: 15,
     y: 15,
-    width: type === 'line' ? 40 : type === 'text' ? 60 : 50,
+    width: type === 'line' ? 40 : type === 'text' || type === 'variable' ? 60 : 50,
     height: type === 'line' ? 0 : 20,
     rotation: 0,
     zIndex: 1,

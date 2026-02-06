@@ -1,0 +1,598 @@
+/* 连接打印页面：左侧本地打印机固定，右侧主内容 */
+.connect-print {
+  display: flex;
+  gap: 0;
+  padding: 0;
+  min-height: calc(100vh - 60px);
+  margin: 0 -20px;
+}
+
+/* 左侧：本地打印机（固定宽度） */
+.left-printer-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  background: white;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+}
+
+.left-printer-sidebar .panel-header {
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.left-printer-sidebar .panel-header h3 {
+  font-size: 16px;
+  color: #1f2937;
+  margin: 0 0 12px 0;
+  font-weight: 600;
+}
+
+.left-printer-sidebar .search-box input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.left-printer-sidebar .search-box input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.left-printer-sidebar .printer-list {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  min-height: 200px;
+}
+
+.left-printer-sidebar .empty-printers {
+  text-align: center;
+  padding: 32px 16px;
+  color: #9ca3af;
+}
+
+.left-printer-sidebar .empty-printers .empty-icon {
+  font-size: 40px;
+  display: block;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.left-printer-sidebar .empty-printers p {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+}
+
+.left-printer-sidebar .empty-printers .hint {
+  font-size: 12px;
+  color: #d1d5db;
+}
+
+.left-printer-sidebar .printer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.left-printer-sidebar .printer-item:hover {
+  background: #f3f4f6;
+}
+
+.left-printer-sidebar .printer-item.active {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.left-printer-sidebar .printer-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.left-printer-sidebar .printer-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.left-printer-sidebar .printer-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.left-printer-sidebar .printer-address {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* 右侧主内容 */
+.right-content {
+  flex: 1;
+  min-width: 0;
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+/* 顶部连接信息栏 */
+.connection-bar {
+  background: white;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.connection-bar .section-title {
+  font-size: 18px;
+  color: #1f2937;
+  margin: 0 0 16px 0;
+  font-weight: 600;
+}
+
+.connection-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 20px 24px;
+}
+
+.connection-type {
+  flex: 0 0 auto;
+}
+
+.connection-type > label {
+  display: block;
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.type-options {
+  display: flex;
+  gap: 20px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+}
+
+.radio-label input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.config-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  align-items: flex-end;
+}
+
+.config-row .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.config-row .field label {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.config-row .field input {
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  min-width: 160px;
+}
+
+.config-row .field input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.connection-actions {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+.btn-sm {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+/* 选择模板区域 */
+.template-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.subsection-title {
+  font-size: 16px;
+  color: #1f2937;
+  margin: 0 0 16px 0;
+  font-weight: 600;
+}
+
+.template-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.template-select {
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  min-width: 220px;
+  background: white;
+}
+
+.template-select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.template-hint {
+  margin: 12px 0 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.template-hint.text-muted {
+  color: #9ca3af;
+}
+
+/* 批量填入变量区域 */
+.batch-vars-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.file-label {
+  cursor: pointer;
+  margin: 0;
+  display: inline-block;
+}
+
+.file-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.file-name {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.batch-grid {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 24px;
+  min-height: 320px;
+}
+
+.batch-left,
+.batch-right {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fafafa;
+}
+
+.batch-left-header,
+.batch-right-header {
+  padding: 10px 14px;
+  background: #f3f4f6;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.batch-right-header.second {
+  border-top: 1px solid #e5e7eb;
+}
+
+.batch-left-body,
+.batch-right-body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  min-height: 120px;
+}
+
+.batch-right-body.empty-area {
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 生成的 ZPL：Excel 展示区下方整块 */
+.zpl-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.zpl-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 12px 0;
+}
+
+.zpl-section .zpl-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.zpl-textarea {
+  width: 100%;
+  min-height: 180px;
+  padding: 12px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  resize: vertical;
+  background: #fafafa;
+}
+
+.zpl-textarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.copy-zpl-btn {
+  align-self: flex-start;
+}
+
+/* 模拟数据区块 */
+.simulate-section {
+  border-top: 1px solid #e5e7eb;
+}
+
+.simulate-desc {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+}
+
+.simulate-toolbar {
+  margin-bottom: 12px;
+}
+
+.simulate-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.simulate-row-select {
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+}
+
+.simulate-row-select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.empty-data,
+.empty-vars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 160px;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.empty-vars p,
+.empty-data p {
+  margin: 0;
+}
+
+.data-table-wrap {
+  overflow-x: auto;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: white;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.data-table thead {
+  position: sticky;
+  top: 0;
+  background: #f9fafb;
+  z-index: 1;
+}
+
+.data-table th.th-cell {
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.data-table td.td-cell {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #4b5563;
+}
+
+.data-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.var-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.var-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #374151;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  background: white;
+  border: 1px solid #e5e7eb;
+}
+
+.text-muted {
+  color: #9ca3af;
+  font-size: 13px;
+  margin: 0;
+}
+
+/* 加载遮罩 */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.loading-spinner {
+  background: white;
+  padding: 20px 40px;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+@media (max-width: 1024px) {
+  .batch-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .connect-print {
+    flex-direction: column;
+  }
+
+  .left-printer-sidebar {
+    width: 100%;
+    max-height: 280px;
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .connection-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .connection-actions {
+    margin-left: 0;
+  }
+
+  .config-row .field input {
+    min-width: 100%;
+  }
+}

@@ -49,6 +49,12 @@ const router = createRouter({
           name: 'LabelDesigner',
           component: () => import('@/views/label-designer/LabelDesigner.vue'),
           meta: { requiresAuth: true, title: '标签设计器' }
+        },
+        {
+          path: 'connect-print',
+          name: 'ConnectPrint',
+          component: () => import('@/views/connect-print/ConnectPrint.vue'),
+          meta: { requiresAuth: true, title: '连接打印' }
         }
       ]
     },
