@@ -18,26 +18,26 @@
         <div class="prop-row">
           <div class="prop-group">
             <label>X (mm)</label>
-            <input type="number" :value="element.x" @input="emitUpdate('x', numberVal($event))" class="prop-input" />
+            <input type="number" step="0.01" :value="round2(element.x)" @input="emitUpdate('x', round2(numberVal($event)))" class="prop-input" />
           </div>
           <div class="prop-group">
             <label>Y (mm)</label>
-            <input type="number" :value="element.y" @input="emitUpdate('y', numberVal($event))" class="prop-input" />
+            <input type="number" step="0.01" :value="round2(element.y)" @input="emitUpdate('y', round2(numberVal($event)))" class="prop-input" />
           </div>
         </div>
         <div class="prop-row">
           <div class="prop-group">
             <label>宽 (mm)</label>
-            <input type="number" :value="element.width" @input="emitUpdate('width', numberVal($event))" class="prop-input" />
+            <input type="number" step="0.01" :value="round2(element.width)" @input="emitUpdate('width', round2(numberVal($event)))" class="prop-input" />
           </div>
           <div class="prop-group">
             <label>高 (mm)</label>
-            <input type="number" :value="element.height" @input="emitUpdate('height', numberVal($event))" class="prop-input" />
+            <input type="number" step="0.01" :value="round2(element.height)" @input="emitUpdate('height', round2(numberVal($event)))" class="prop-input" />
           </div>
         </div>
         <div class="prop-group">
           <label>旋转 (°)</label>
-          <input type="number" :value="element.rotation" @input="emitUpdate('rotation', numberVal($event))" class="prop-input" min="0" max="360" />
+          <input type="number" :value="round2(element.rotation)" @input="emitUpdate('rotation', round2(numberVal($event)))" class="prop-input" min="0" max="360" />
         </div>
 
         <template v-if="element.type === 'text'">
@@ -157,6 +157,11 @@ function numberVal(e: Event): number {
   const v = (e.target as HTMLInputElement).value
   const n = parseFloat(v)
   return Number.isFinite(n) ? n : 0
+}
+
+function round2(n: number | undefined): number {
+  if (n == null || !Number.isFinite(n)) return 0
+  return Math.round(n * 100) / 100
 }
 
 function emitUpdate(key: string, value: unknown) {

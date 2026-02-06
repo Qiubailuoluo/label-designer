@@ -57,15 +57,58 @@ function flushCanvasToState() {
   flushedGeometry.value = map
 }
 
-/** 清空并按数据重新渲染；重画时用 flushedGeometry 覆盖几何，避免 state 未同步导致尺寸回退 */
-function fullSyncToFabric() {
+/** 按给定元素列表重画画布（设置尺寸、清空、添加对象、图片、选中） */
+function drawToFabric(elements: DesignElement[]) {
   if (!fabricCanvas || !containerRef.value) return
-  isSyncing = true
   const dpi = props.config.dpi || 300
   const { width, height } = getCanvasSize()
+  fabricCanvas.setDimensions({ width, height })
+  fabricCanvas.backgroundColor = props.config.backgroundColor
+  fabricCanvas.clear()
 
+  const sorted = elements.filter((e) => e.visible !== false).sort((a, b) => a.zIndex - b.zIndex)
+  for (const el of sorted) {
+    const obj = createFabricObject(el as DesignElement, dpi)
+    fabricCanvas.add(obj)
+  }
+
+  for (const el of sorted) {
+    if (el.type === 'image' && (el as any).src) {
+      const x = mmToPx(el.x, dpi)
+      const y = mmToPx(el.y, dpi)
+      const w = mmToPx(el.width, dpi)
+      const h = mmToPx(el.height, dpi)
+      loadImageObject((el as any).src, x, y, w, h, el.rotation ?? 0, dpi, el.id)
+        .then((imgObj) => {
+          if (!fabricCanvas) return
+          const oldObj = fabricCanvas.getObjects().find((o: fabric.Object) => o.get('elementId') === el.id)
+          if (oldObj) {
+            fabricCanvas.remove(oldObj)
+            fabricCanvas.add(imgObj)
+            if (props.selectedId === el.id) fabricCanvas.setActiveObject(imgObj)
+            fabricCanvas.requestRenderAll()
+          }
+        })
+        .catch(() => {})
+    }
+  }
+
+  const sel = props.selectedId
+  if (sel) {
+    const obj = fabricCanvas.getObjects().find((o: fabric.Object) => o.get('elementId') === sel)
+    if (obj) fabricCanvas.setActiveObject(obj)
+  } else {
+    fabricCanvas.discardActiveObject()
+  }
+
+  fabricCanvas.requestRenderAll()
+}
+
+/** 结构变化（增删元素、画布配置）：先 flush 画布几何到 state，再按合并后的数据重画，避免尺寸回退 */
+function fullSyncWithFlush() {
+  if (!fabricCanvas || !containerRef.value) return
+  isSyncing = true
   flushCanvasToState()
-
   nextTick(() => {
     if (!fabricCanvas || !containerRef.value) {
       isSyncing = false
@@ -76,47 +119,22 @@ function fullSyncToFabric() {
       const g = geom[e.id]
       return g ? { ...e, ...g } : e
     })
-    fabricCanvas.setDimensions({ width, height })
-    fabricCanvas.backgroundColor = props.config.backgroundColor
-    fabricCanvas.clear()
-
-    const sorted = merged.filter((e) => e.visible !== false).sort((a, b) => a.zIndex - b.zIndex)
-    for (const el of sorted) {
-      const obj = createFabricObject(el as DesignElement, dpi)
-      fabricCanvas.add(obj)
-    }
-
-    for (const el of sorted) {
-      if (el.type === 'image' && (el as any).src) {
-        const x = mmToPx(el.x, dpi)
-        const y = mmToPx(el.y, dpi)
-        const w = mmToPx(el.width, dpi)
-        const h = mmToPx(el.height, dpi)
-        loadImageObject((el as any).src, x, y, w, h, el.rotation ?? 0, dpi, el.id)
-          .then((imgObj) => {
-            if (!fabricCanvas) return
-            const oldObj = fabricCanvas.getObjects().find((o: fabric.Object) => o.get('elementId') === el.id)
-            if (oldObj) {
-              fabricCanvas.remove(oldObj)
-              fabricCanvas.add(imgObj)
-              if (props.selectedId === el.id) fabricCanvas.setActiveObject(imgObj)
-              fabricCanvas.requestRenderAll()
-            }
-          })
-          .catch(() => {})
-      }
-    }
-
-    const sel = props.selectedId
-    if (sel) {
-      const obj = fabricCanvas.getObjects().find((o: fabric.Object) => o.get('elementId') === sel)
-      if (obj) fabricCanvas.setActiveObject(obj)
-    } else {
-      fabricCanvas.discardActiveObject()
-    }
-
-    fabricCanvas.requestRenderAll()
+    drawToFabric(merged as DesignElement[])
     flushedGeometry.value = {}
+    setTimeout(() => { isSyncing = false }, 50)
+  })
+}
+
+/** 内容或几何来自右侧面板修改：不 flush，直接按当前 state 重画，实现实时更新 */
+function fullSyncFromState() {
+  if (!fabricCanvas || !containerRef.value) return
+  isSyncing = true
+  nextTick(() => {
+    if (!fabricCanvas || !containerRef.value) {
+      isSyncing = false
+      return
+    }
+    drawToFabric(props.elements)
     setTimeout(() => { isSyncing = false }, 50)
   })
 }
@@ -197,7 +215,7 @@ onMounted(() => {
     }
   })
 
-  fullSyncToFabric()
+  fullSyncWithFlush()
 })
 
 onUnmounted(() => {
@@ -228,6 +246,15 @@ function contentSignature(el: DesignElement): string {
   }
 }
 
+/** 几何签名：右侧改 x/y/宽/高/旋转 时触发按 state 重画，实现实时更新 */
+function geometryKey(el: DesignElement): string {
+  return `${el.id}:${round2(el.x)}:${round2(el.y)}:${round2(el.width)}:${round2(el.height)}:${round2(el.rotation ?? 0)}`
+}
+function round2(n: number | undefined): number {
+  if (n == null || !Number.isFinite(n)) return 0
+  return Math.round(n * 100) / 100
+}
+
 watch(
   () => ({
     w: props.config.width,
@@ -236,9 +263,16 @@ watch(
     bg: props.config.backgroundColor,
     len: props.elements.length,
     ids: props.elements.map(e => e.id).join(','),
-    contentKey: props.elements.map(e => `${e.id}:${contentSignature(e)}`).join('|'),
   }),
-  () => fullSyncToFabric(),
+  () => fullSyncWithFlush(),
+  { deep: true }
+)
+watch(
+  () => ({
+    contentKey: props.elements.map(e => `${e.id}:${contentSignature(e)}`).join('|'),
+    geometryKey: props.elements.map(e => geometryKey(e)).join('|'),
+  }),
+  () => fullSyncFromState(),
   { deep: true }
 )
 watch(

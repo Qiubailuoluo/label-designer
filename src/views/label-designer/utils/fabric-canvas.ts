@@ -16,6 +16,11 @@ export function pxToMm(px: number, dpi: number = DPI): number {
   return (px / dpi) * 25.4
 }
 
+/** 几何数值统一保留最多两位小数，避免浮点误差与回退问题 */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
 const defaultOpts = {
   selectable: true,
   hasControls: true,
@@ -32,6 +37,15 @@ const defaultOpts = {
 function setElementMeta(obj: fabric.Object, id: string, type: string) {
   obj.set('elementId', id)
   obj.set('elementType', type)
+}
+
+/** 对文本类对象按目标像素宽高设置 scale，使拖拽/属性面板修改的宽高在重画时生效 */
+function applyTextSize(obj: fabric.Object, targetW: number, targetH: number) {
+  const nw = (obj.width ?? 0) as number
+  const nh = (obj.height ?? 0) as number
+  if (targetW > 0 && targetH > 0 && nw > 0 && nh > 0) {
+    obj.set({ scaleX: targetW / nw, scaleY: targetH / nh })
+  }
 }
 
 /** 异步加载图片并返回 Fabric 图片对象，用于替换画布上的图片占位 */
@@ -90,6 +104,7 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
         ...defaultOpts,
       })
       setElementMeta(text, element.id, 'text')
+      applyTextSize(text, w, h)
       return text
     }
 
@@ -153,6 +168,7 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
         ...defaultOpts,
       })
       setElementMeta(text, element.id, 'variable')
+      applyTextSize(text, w, h)
       return text
     }
 
@@ -166,6 +182,7 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
         ...defaultOpts,
       })
       setElementMeta(text, element.id, 'barcode')
+      applyTextSize(text, w, h)
       return text
     }
 
@@ -221,11 +238,11 @@ export function getUpdatesFromFabricObject(obj: fabric.Object, dpi: number, geom
     const startY = top - (lenPx / 2) * Math.sin(rad)
     const lineUpdates: Partial<DesignElement> = {
       id,
-      x: pxToMm(startX, dpi),
-      y: pxToMm(startY, dpi),
-      width: pxToMm(lenPx, dpi),
+      x: round2(pxToMm(startX, dpi)),
+      y: round2(pxToMm(startY, dpi)),
+      width: round2(pxToMm(lenPx, dpi)),
       height: 0,
-      rotation: angle,
+      rotation: round2(angle),
     }
     if (obj instanceof fabric.Line) {
       ;(lineUpdates as any).stroke = obj.stroke
@@ -238,11 +255,11 @@ export function getUpdatesFromFabricObject(obj: fabric.Object, dpi: number, geom
   const actualH = height * scaleY
   const updates: Partial<DesignElement> = {
     id,
-    x: pxToMm(left, dpi),
-    y: pxToMm(top, dpi),
-    width: pxToMm(actualW, dpi),
-    height: pxToMm(actualH, dpi),
-    rotation: angle,
+    x: round2(pxToMm(left, dpi)),
+    y: round2(pxToMm(top, dpi)),
+    width: round2(pxToMm(actualW, dpi)),
+    height: round2(pxToMm(actualH, dpi)),
+    rotation: round2(angle),
   }
   if (geometryOnly) return updates
 
@@ -269,8 +286,8 @@ export function getUpdatesFromFabricObject(obj: fabric.Object, dpi: number, geom
     const rx = (obj.rx ?? 0) as number
     const ry = (obj.ry ?? 0) as number
     Object.assign(updates, {
-      width: pxToMm(rx * 2 * scaleX, dpi),
-      height: pxToMm(ry * 2 * scaleY, dpi),
+      width: round2(pxToMm(rx * 2 * scaleX, dpi)),
+      height: round2(pxToMm(ry * 2 * scaleY, dpi)),
       fill: obj.fill,
       stroke: obj.stroke,
       strokeWidth: obj.strokeWidth,
