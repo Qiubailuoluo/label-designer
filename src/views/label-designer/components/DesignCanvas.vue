@@ -7,7 +7,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as fabric from 'fabric'
 import type { CanvasConfig, DesignElement } from '../types'
 import { mmToPx, pxToMm, createFabricObject, getUpdatesFromFabricObject, loadImageObject } from '../utils/fabric-canvas'
@@ -28,6 +28,8 @@ const containerRef = ref<HTMLDivElement | null>(null)
 const canvasEl = ref<HTMLCanvasElement | null>(null)
 let fabricCanvas: fabric.Canvas | null = null
 let isSyncing = false
+/** flush 时从画布读出的几何，重画时优先用这份，避免父组件 state 尚未同步导致尺寸回退 */
+const flushedGeometry = ref<Record<string, Partial<DesignElement>>>({})
 
 function getCanvasSize() {
   const dpi = props.config.dpi || 300
@@ -37,20 +39,25 @@ function getCanvasSize() {
   }
 }
 
-/** 将当前画布上所有对象的几何（位置/尺寸/旋转）写回 state，避免重画时用旧尺寸；不写内容以免覆盖右侧刚改的 */
+/** 将当前画布上所有对象的几何写回 state，并存到 flushedGeometry 供本次重画使用 */
 function flushCanvasToState() {
   if (!fabricCanvas) return
   const dpi = props.config.dpi || 300
   const objs = fabricCanvas.getObjects()
+  const map: Record<string, Partial<DesignElement>> = {}
   for (const obj of objs) {
     const id = obj.get('elementId') as string
     if (!id) continue
     const updates = getUpdatesFromFabricObject(obj, dpi, true)
-    if (Object.keys(updates).length > 0) emit('element-update', id, updates)
+    if (Object.keys(updates).length > 0) {
+      map[id] = updates
+      emit('element-update', id, updates)
+    }
   }
+  flushedGeometry.value = map
 }
 
-/** 仅当 elements 或 config 变化时：清空并按数据重新渲染，再恢复选中 */
+/** 清空并按数据重新渲染；重画时用 flushedGeometry 覆盖几何，避免 state 未同步导致尺寸回退 */
 function fullSyncToFabric() {
   if (!fabricCanvas || !containerRef.value) return
   isSyncing = true
@@ -59,47 +66,59 @@ function fullSyncToFabric() {
 
   flushCanvasToState()
 
-  fabricCanvas.setDimensions({ width, height })
-  fabricCanvas.backgroundColor = props.config.backgroundColor
-  fabricCanvas.clear()
-
-  const sorted = [...props.elements].filter(e => e.visible !== false).sort((a, b) => a.zIndex - b.zIndex)
-  for (const el of sorted) {
-    const obj = createFabricObject(el, dpi)
-    fabricCanvas.add(obj)
-  }
-
-  for (const el of sorted) {
-    if (el.type === 'image' && (el as any).src) {
-      const x = mmToPx(el.x, dpi)
-      const y = mmToPx(el.y, dpi)
-      const w = mmToPx(el.width, dpi)
-      const h = mmToPx(el.height, dpi)
-      loadImageObject((el as any).src, x, y, w, h, el.rotation ?? 0, dpi, el.id)
-        .then((imgObj) => {
-          if (!fabricCanvas) return
-          const oldObj = fabricCanvas.getObjects().find((o: fabric.Object) => o.get('elementId') === el.id)
-          if (oldObj) {
-            fabricCanvas.remove(oldObj)
-            fabricCanvas.add(imgObj)
-            if (props.selectedId === el.id) fabricCanvas.setActiveObject(imgObj)
-            fabricCanvas.requestRenderAll()
-          }
-        })
-        .catch(() => {})
+  nextTick(() => {
+    if (!fabricCanvas || !containerRef.value) {
+      isSyncing = false
+      return
     }
-  }
+    const geom = flushedGeometry.value
+    const merged = props.elements.map((e) => {
+      const g = geom[e.id]
+      return g ? { ...e, ...g } : e
+    })
+    fabricCanvas.setDimensions({ width, height })
+    fabricCanvas.backgroundColor = props.config.backgroundColor
+    fabricCanvas.clear()
 
-  const sel = props.selectedId
-  if (sel) {
-    const obj = fabricCanvas.getObjects().find((o: fabric.Object) => o.get('elementId') === sel)
-    if (obj) fabricCanvas.setActiveObject(obj)
-  } else {
-    fabricCanvas.discardActiveObject()
-  }
+    const sorted = merged.filter((e) => e.visible !== false).sort((a, b) => a.zIndex - b.zIndex)
+    for (const el of sorted) {
+      const obj = createFabricObject(el as DesignElement, dpi)
+      fabricCanvas.add(obj)
+    }
 
-  fabricCanvas.requestRenderAll()
-  setTimeout(() => { isSyncing = false }, 50)
+    for (const el of sorted) {
+      if (el.type === 'image' && (el as any).src) {
+        const x = mmToPx(el.x, dpi)
+        const y = mmToPx(el.y, dpi)
+        const w = mmToPx(el.width, dpi)
+        const h = mmToPx(el.height, dpi)
+        loadImageObject((el as any).src, x, y, w, h, el.rotation ?? 0, dpi, el.id)
+          .then((imgObj) => {
+            if (!fabricCanvas) return
+            const oldObj = fabricCanvas.getObjects().find((o: fabric.Object) => o.get('elementId') === el.id)
+            if (oldObj) {
+              fabricCanvas.remove(oldObj)
+              fabricCanvas.add(imgObj)
+              if (props.selectedId === el.id) fabricCanvas.setActiveObject(imgObj)
+              fabricCanvas.requestRenderAll()
+            }
+          })
+          .catch(() => {})
+      }
+    }
+
+    const sel = props.selectedId
+    if (sel) {
+      const obj = fabricCanvas.getObjects().find((o: fabric.Object) => o.get('elementId') === sel)
+      if (obj) fabricCanvas.setActiveObject(obj)
+    } else {
+      fabricCanvas.discardActiveObject()
+    }
+
+    fabricCanvas.requestRenderAll()
+    flushedGeometry.value = {}
+    setTimeout(() => { isSyncing = false }, 50)
+  })
 }
 
 /** 仅更新当前选中对象，不清空画布（保证拖拽/缩放可用） */
