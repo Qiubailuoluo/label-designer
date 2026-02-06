@@ -44,6 +44,7 @@ function elementToBackend(el: DesignElement): Record<string, unknown> {
     base.textAlign = (el as any).textAlign ?? 'left'
     base.bold = (el as any).bold
     base.italic = (el as any).italic
+    if ((el as any).dataField != null && (el as any).dataField !== '') base.dataField = (el as any).dataField
   }
   if (el.type === 'rectangle') {
     base.fill = (el as any).fill
@@ -63,6 +64,7 @@ function elementToBackend(el: DesignElement): Record<string, unknown> {
   if (el.type === 'barcode') {
     base.content = (el as any).content
     base.format = (el as any).format
+    if ((el as any).dataField != null && (el as any).dataField !== '') base.dataField = (el as any).dataField
   }
   if (el.type === 'variable') {
     base.dataField = (el as any).dataField
@@ -79,6 +81,8 @@ export interface SavePayload {
   height: number
   config: CanvasConfig
   elements: DesignElement[]
+  /** 用户自定义变量名列表（如 变量1、变量2），随模板保存 */
+  customVariableNames?: string[]
 }
 
 export async function saveTemplate(payload: SavePayload): Promise<{ id: string }> {
@@ -100,6 +104,7 @@ export async function saveTemplate(payload: SavePayload): Promise<{ id: string }
           unit: 'mm',
         },
         elements: payload.elements.map(elementToBackend),
+        customVariableNames: payload.customVariableNames ?? [],
         dataFields: {},
         printer: { model: 'Zebra ZT410', density: 8, speed: 4 },
       },
@@ -138,6 +143,7 @@ function backendElementToDesign(el: any): DesignElement {
       textAlign: (el.textAlign ?? 'left') as 'left' | 'center' | 'right',
       bold: !!el.bold,
       italic: !!el.italic,
+      dataField: el.dataField != null && el.dataField !== '' ? String(el.dataField) : undefined,
     } as DesignElement
   }
   if (base.type === 'rectangle') {
@@ -173,13 +179,14 @@ function backendElementToDesign(el: any): DesignElement {
       type: 'barcode',
       content: el.content ?? el.data ?? '',
       format: el.format ?? 'CODE128',
+      dataField: el.dataField != null && el.dataField !== '' ? String(el.dataField) : undefined,
     } as DesignElement
   }
-  if (base.type === 'variable' || el.dataField) {
+  if (base.type === 'variable') {
     return {
       ...base,
       type: 'variable',
-      dataField: el.dataField ?? 'TID',
+      dataField: String(el.dataField ?? 'TID'),
       label: el.label ?? 'TID:',
       sampleValue: el.sampleValue ?? '',
     } as DesignElement
@@ -194,6 +201,8 @@ export interface LoadedTemplate {
   height: number
   config: CanvasConfig
   elements: DesignElement[]
+  /** 用户自定义变量名列表（如 变量1、变量2） */
+  customVariableNames: string[]
 }
 
 export async function loadTemplate(id: string): Promise<LoadedTemplate> {
@@ -204,6 +213,7 @@ export async function loadTemplate(id: string): Promise<LoadedTemplate> {
   const config = data?.config ?? {}
   const canvas = config?.canvas ?? {}
   const elementsRaw = config?.elements ?? []
+  const customVariableNames = Array.isArray(config?.customVariableNames) ? config.customVariableNames : []
   return {
     id: data?.id ?? id,
     name: data?.name ?? '未命名',
@@ -217,6 +227,7 @@ export async function loadTemplate(id: string): Promise<LoadedTemplate> {
       gridEnabled: true,
     },
     elements: elementsRaw.map(backendElementToDesign),
+    customVariableNames: customVariableNames.map((s: unknown) => String(s)),
   }
 }
 

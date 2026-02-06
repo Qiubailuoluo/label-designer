@@ -47,19 +47,25 @@ function sortElements(elements: DesignElement[]): DesignElement[] {
     })
 }
 
-/** 从模板元素中收集所有可填入的变量名：variable 的 dataField + 条码(条码、条码_2...) */
+/** 从模板元素中收集所有可填入的变量名：绑定变量的文本、variable、条码的 dataField */
 export function collectFillableVariables(elements: DesignElement[]): string[] {
   const list: string[] = []
   let barcodeIndex = 0
   for (const el of sortElements(elements)) {
-    if (el.type === 'variable') {
+    if (el.type === 'text') {
+      const dataField = (el as TextElement).dataField
+      if (dataField && !list.includes(dataField)) list.push(dataField)
+    } else if (el.type === 'variable') {
       const dataField = (el as VariableElement).dataField ?? 'TID'
-      const key = String(dataField)
-      if (!list.includes(key)) list.push(key)
+      if (!list.includes(dataField)) list.push(dataField)
     } else if (el.type === 'barcode') {
-      const key = barcodeIndex === 0 ? BARCODE_PLACEHOLDER_BASE : `${BARCODE_PLACEHOLDER_BASE}_${barcodeIndex}`
-      barcodeIndex++
-      if (!list.includes(key)) list.push(key)
+      const dataField = (el as BarcodeElement).dataField
+      if (dataField && !list.includes(dataField)) list.push(dataField)
+      else if (!dataField) {
+        const key = barcodeIndex === 0 ? BARCODE_PLACEHOLDER_BASE : `${BARCODE_PLACEHOLDER_BASE}_${barcodeIndex}`
+        barcodeIndex++
+        if (!list.includes(key)) list.push(key)
+      }
     }
   }
   return list
@@ -101,8 +107,10 @@ export function templateToZPL(
         const fontSize = t.fontSize ?? 12
         const fontHeight = Math.max(10, Math.round((fontSize / 72) * dpi))
         const fontWidth = Math.round(fontHeight * 0.6)
-        const content = (t.content ?? '').trim() || ' '
-        parts.push(`^FO${x},${y}^RO${rot}^A0N,${fontHeight},${fontWidth}^FD${escapeFieldData(content)}^FS`)
+        const content = t.dataField && usePlaceholder
+          ? `${VARIABLE_PLACEHOLDER_PREFIX}${t.dataField}${VARIABLE_PLACEHOLDER_SUFFIX}`
+          : ((t.content ?? '').trim() || ' ')
+        parts.push(`^FO${x},${y}^RO${rot}^A0N,${fontHeight},${fontWidth}^FD${usePlaceholder && t.dataField ? content : escapeFieldData(content)}^FS`)
         break
       }
       case 'variable': {
@@ -119,8 +127,8 @@ export function templateToZPL(
       }
       case 'barcode': {
         const b = el as BarcodeElement
-        const barKey = barcodeIndex === 0 ? BARCODE_PLACEHOLDER_BASE : `${BARCODE_PLACEHOLDER_BASE}_${barcodeIndex}`
-        barcodeIndex++
+        const barKey = b.dataField || (barcodeIndex === 0 ? BARCODE_PLACEHOLDER_BASE : `${BARCODE_PLACEHOLDER_BASE}_${barcodeIndex}`)
+        if (!b.dataField) barcodeIndex++
         const data = usePlaceholder
           ? `${VARIABLE_PLACEHOLDER_PREFIX}${barKey}${VARIABLE_PLACEHOLDER_SUFFIX}`
           : (b.content ?? '').trim() || '0'

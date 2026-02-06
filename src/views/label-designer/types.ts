@@ -28,7 +28,7 @@ export interface BaseElement {
   visible: boolean
 }
 
-/** 文本 */
+/** 文本（可选绑定变量：设 dataField 则打印时用 Excel 替换，否则用 content 固定文本） */
 export interface TextElement extends BaseElement {
   type: 'text'
   content: string
@@ -38,6 +38,8 @@ export interface TextElement extends BaseElement {
   textAlign: 'left' | 'center' | 'right'
   bold: boolean
   italic: boolean
+  /** 绑定变量名（如 变量1、EPC）；空则不绑定，使用 content */
+  dataField?: string
 }
 
 /** 矩形 */
@@ -64,11 +66,13 @@ export interface EllipseElement extends BaseElement {
   strokeWidth: number
 }
 
-/** 条码 */
+/** 条码（可选 dataField：绑定变量名，打印时用 Excel 列替换内容） */
 export interface BarcodeElement extends BaseElement {
   type: 'barcode'
   content: string
   format: string
+  /** 绑定变量名（如 变量1、条码、EPC）；空则使用 content */
+  dataField?: string
 }
 
 /** 图片 */
@@ -78,10 +82,10 @@ export interface ImageElement extends BaseElement {
   alt?: string
 }
 
-/** 变量（RFID 等动态数据） */
+/** 变量（RFID 或用户变量：dataField 为 EPC/TID/User Data 或 变量1、变量2 等） */
 export interface VariableElement extends BaseElement {
   type: 'variable'
-  dataField: 'EPC' | 'TID' | 'User Data'
+  dataField: string
   label: string
   sampleValue: string
 }

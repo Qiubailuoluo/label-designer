@@ -42,6 +42,13 @@
 
         <template v-if="element.type === 'text'">
           <div class="prop-group">
+            <label>绑定变量</label>
+            <select :value="getCurrentDataField()" @change="emitUpdate('dataField', ($event.target as HTMLSelectElement).value)" class="prop-select">
+              <option v-for="opt in bindVariableOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+            <p class="prop-hint">绑定后打印时用 Excel 列替换；不绑定则使用下方固定内容</p>
+          </div>
+          <div class="prop-group">
             <label>内容</label>
             <input :value="(element as any).content" @input="emitUpdate('content', ($event.target as HTMLInputElement).value)" class="prop-input" />
           </div>
@@ -97,6 +104,12 @@
 
         <template v-if="element.type === 'variable'">
           <div class="prop-group">
+            <label>绑定变量</label>
+            <select :value="(element as any).dataField" @change="emitUpdate('dataField', ($event.target as HTMLSelectElement).value)" class="prop-select">
+              <option v-for="opt in bindVariableOptionsRequired" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </div>
+          <div class="prop-group">
             <label>标签</label>
             <input :value="(element as any).label" @input="emitUpdate('label', ($event.target as HTMLInputElement).value)" class="prop-input" />
           </div>
@@ -107,6 +120,13 @@
         </template>
 
         <template v-if="element.type === 'barcode'">
+          <div class="prop-group">
+            <label>绑定变量</label>
+            <select :value="(element as any).dataField ?? ''" @change="emitUpdate('dataField', ($event.target as HTMLSelectElement).value || undefined)" class="prop-select">
+              <option v-for="opt in bindVariableOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+            <p class="prop-hint">绑定后打印时用 Excel 列替换条码内容；不绑定则使用下方内容</p>
+          </div>
           <div class="prop-group">
             <label>内容</label>
             <input :value="(element as any).content" @input="emitUpdate('content', ($event.target as HTMLInputElement).value)" class="prop-input" />
@@ -142,11 +162,40 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { DesignElement } from '../types'
+
+const BINDABLE_VARIABLE_OPTIONS = ['EPC', 'TID', 'User Data'] as const
 
 const props = defineProps<{
   element: DesignElement | null
+  customVariableNames?: string[]
 }>()
+
+/** 绑定变量下拉选项：空（不绑定）+ 用户变量 + RFID（用于文本、条码） */
+const bindVariableOptions = computed(() => {
+  const custom = props.customVariableNames ?? []
+  return [
+    { value: '', label: '不绑定' },
+    ...custom.map((n) => ({ value: n, label: n })),
+    ...BINDABLE_VARIABLE_OPTIONS.map((n) => ({ value: n, label: n })),
+  ]
+})
+
+/** 变量元素用：必须选一项，无“不绑定” */
+const bindVariableOptionsRequired = computed(() => {
+  const custom = props.customVariableNames ?? []
+  return [
+    ...custom.map((n) => ({ value: n, label: n })),
+    ...BINDABLE_VARIABLE_OPTIONS.map((n) => ({ value: n, label: n })),
+  ]
+})
+
+function getCurrentDataField(): string {
+  if (!props.element) return ''
+  const el = props.element as { dataField?: string }
+  return el.dataField ?? ''
+}
 
 const emit = defineEmits<{
   update: [id: string, updates: Partial<DesignElement>]

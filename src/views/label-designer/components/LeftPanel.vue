@@ -1,7 +1,7 @@
 <template>
   <div class="left-panel">
     <section class="panel-section">
-      <h3 class="section-title">布局板</h3>
+      <h3 class="section-title">基本元素</h3>
       <div class="tool-grid">
         <button
           v-for="t in layoutTools"
@@ -17,16 +17,35 @@
     </section>
 
     <section class="panel-section">
-      <h3 class="section-title">变量</h3>
+      <h3 class="section-title">RFID 标签</h3>
       <div class="variable-list">
         <button
-          v-for="v in variables"
+          v-for="v in rfidVariables"
           :key="v.dataField"
           class="variable-btn"
-          @click="addVariable(v)"
+          @click="addRfidVariable(v)"
         >
           <span class="variable-icon">📌</span>
           {{ v.label }}
+        </button>
+      </div>
+    </section>
+
+    <section class="panel-section">
+      <h3 class="section-title">变量</h3>
+      <p class="section-hint">用户创建的变量，用于绑定 Excel 列</p>
+      <div class="variable-list">
+        <button
+          v-for="name in customVariableNames"
+          :key="name"
+          class="variable-btn"
+          @click="addCustomVariableElement(name)"
+        >
+          <span class="variable-icon">📌</span>
+          {{ name }}
+        </button>
+        <button type="button" class="add-variable-btn" @click="emit('add-custom-variable')">
+          + 添加变量
         </button>
       </div>
     </section>
@@ -36,8 +55,13 @@
 <script setup lang="ts">
 import type { DesignElement, ElementType } from '../types'
 
+const props = defineProps<{
+  customVariableNames: string[]
+}>()
+
 const emit = defineEmits<{
   'add-element': [element: Omit<DesignElement, 'id'>]
+  'add-custom-variable': []
 }>()
 
 const layoutTools: { type: ElementType; name: string; icon: string; defaults: Record<string, unknown> }[] = [
@@ -47,13 +71,12 @@ const layoutTools: { type: ElementType; name: string; icon: string; defaults: Re
   { type: 'ellipse', name: '椭圆', icon: '○', defaults: { name: '椭圆', fill: '#ffffff', stroke: '#000000', strokeWidth: 1 } },
   { type: 'barcode', name: '条码', icon: '▌', defaults: { name: '条码', content: '123456789012', format: 'CODE128' } },
   { type: 'image', name: '图片', icon: '🖼', defaults: { name: '图片', src: '', alt: '' } },
-  { type: 'variable', name: '变量', icon: '📌', defaults: { name: '变量', dataField: 'EPC', label: 'EPC:', sampleValue: '0123456789ABCDEF' } },
 ]
 
-const variables = [
-  { dataField: 'EPC' as const, label: 'EPC' },
-  { dataField: 'TID' as const, label: 'TID' },
-  { dataField: 'User Data' as const, label: 'User Data' },
+const rfidVariables = [
+  { dataField: 'EPC', label: 'EPC' },
+  { dataField: 'TID', label: 'TID' },
+  { dataField: 'User Data', label: 'User Data' },
 ]
 
 function addElement(type: ElementType, defaults: Record<string, unknown>) {
@@ -62,7 +85,7 @@ function addElement(type: ElementType, defaults: Record<string, unknown>) {
     name: (defaults.name as string) || type,
     x: 15,
     y: 15,
-    width: type === 'line' ? 40 : type === 'text' || type === 'variable' ? 60 : 50,
+    width: type === 'line' ? 40 : type === 'text' ? 60 : 50,
     height: type === 'line' ? 0 : 20,
     rotation: 0,
     zIndex: 1,
@@ -71,7 +94,7 @@ function addElement(type: ElementType, defaults: Record<string, unknown>) {
   emit('add-element', { ...base, ...defaults } as Omit<DesignElement, 'id'>)
 }
 
-function addVariable(v: { dataField: 'EPC' | 'TID' | 'User Data'; label: string }) {
+function addRfidVariable(v: { dataField: string; label: string }) {
   emit('add-element', {
     type: 'variable',
     name: v.label,
@@ -85,6 +108,23 @@ function addVariable(v: { dataField: 'EPC' | 'TID' | 'User Data'; label: string 
     dataField: v.dataField,
     label: v.label + ':',
     sampleValue: v.dataField === 'TID' ? '387656779876543212345678' : v.dataField === 'EPC' ? '0123456789ABCDEF' : '00000001',
+  } as Omit<DesignElement, 'id'>)
+}
+
+function addCustomVariableElement(varName: string) {
+  emit('add-element', {
+    type: 'variable',
+    name: varName,
+    x: 15,
+    y: 15,
+    width: 80,
+    height: 18,
+    rotation: 0,
+    zIndex: 1,
+    visible: true,
+    dataField: varName,
+    label: varName + ':',
+    sampleValue: '',
   } as Omit<DesignElement, 'id'>)
 }
 </script>
@@ -108,6 +148,11 @@ function addVariable(v: { dataField: 'EPC' | 'TID' | 'User Data'; label: string 
   font-size: 13px;
   font-weight: 600;
   color: #333;
+}
+.section-hint {
+  margin: 0 0 8px 0;
+  font-size: 11px;
+  color: #888;
 }
 .tool-grid {
   display: grid;
@@ -160,5 +205,19 @@ function addVariable(v: { dataField: 'EPC' | 'TID' | 'User Data'; label: string 
 }
 .variable-icon {
   font-size: 14px;
+}
+.add-variable-btn {
+  padding: 8px 12px;
+  border: 1px dashed #999;
+  border-radius: 6px;
+  background: #fafafa;
+  color: #666;
+  font-size: 13px;
+  cursor: pointer;
+}
+.add-variable-btn:hover {
+  border-color: #2196f3;
+  color: #2196f3;
+  background: #e8f4fd;
 }
 </style>

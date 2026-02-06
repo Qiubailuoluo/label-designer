@@ -171,6 +171,37 @@
           </div>
         </div>
 
+        <!-- 列绑定：每个可填变量选择对应的 Excel 列 -->
+        <div v-if="templateVariables.length > 0 && excelHeaders.length > 0" class="binding-section">
+          <h4 class="zpl-section-title">列绑定</h4>
+          <p class="simulate-desc">将模板中的可填变量与 Excel 表头列绑定，用于替换 ZPL 占位符。</p>
+          <div class="binding-table-wrap">
+            <table class="binding-table">
+              <thead>
+                <tr>
+                  <th>变量名</th>
+                  <th>绑定 Excel 列</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="varName in templateVariables" :key="varName">
+                  <td class="binding-var-name">{{ varName }}</td>
+                  <td>
+                    <select
+                      :value="variableToColumn[varName] || ''"
+                      class="binding-select"
+                      @change="onBindingChange(varName, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option value="">— 不绑定 —</option>
+                      <option v-for="h in excelHeaders" :key="h" :value="h">{{ h }}</option>
+                    </select>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- 生成的 ZPL：放在 Excel 展示区下方 -->
         <div class="zpl-section">
           <h4 class="zpl-section-title">生成的 ZPL</h4>
@@ -190,10 +221,10 @@
           </div>
         </div>
 
-        <!-- 模拟数据：用 Excel 对应行替换占位符，展示实际将发送的 ZPL -->
+        <!-- 模拟数据：用列绑定 + 所选 Excel 行替换占位符，展示实际将发送的 ZPL -->
         <div class="zpl-section simulate-section">
           <h4 class="zpl-section-title">模拟数据</h4>
-          <p class="simulate-desc">使用 Excel 中与变量同名的列（表头）填入占位符，用于预览实际发送的数据。</p>
+          <p class="simulate-desc">根据上方「列绑定」与所选行，将占位符替换为 Excel 数据，用于预览实际发送的 ZPL。</p>
           <div class="simulate-toolbar">
             <label class="simulate-row-label">
               使用第
@@ -275,6 +306,8 @@ const currentTemplateZPL = ref('')
 const loading = ref(false)
 /** 模拟数据使用的 Excel 行索引（0-based） */
 const simulateRowIndex = ref(0)
+/** 变量名 → Excel 列名（表头）的绑定 */
+const variableToColumn = reactive<Record<string, string>>({})
 
 const excelInputRef = ref<HTMLInputElement | null>(null)
 const excelFileName = ref('')
@@ -291,20 +324,19 @@ const filteredPrinters = computed(() => {
   )
 })
 
-/** 模拟数据：用所选 Excel 行的表头对应数据替换 ZPL 占位符后的结果 */
+/** 模拟数据：用列绑定 + 所选 Excel 行替换 ZPL 占位符后的结果 */
 const simulatedZPL = computed(() => {
   const zpl = currentTemplateZPL.value
   if (!zpl) return ''
   const rows = excelRows.value
-  if (!rows.length || !excelHeaders.value.length) return zpl
+  if (!rows.length) return zpl
   const idx = Math.min(simulateRowIndex.value, rows.length - 1)
   const row = rows[idx]
   if (!row) return zpl
   const vars: Record<string, string | number> = {}
   for (const varName of templateVariables.value) {
-    if (excelHeaders.value.includes(varName) && varName in row) {
-      vars[varName] = row[varName]
-    }
+    const col = variableToColumn[varName]
+    if (col && col.trim() && col in row) vars[varName] = row[col]
   }
   return substituteVariables(zpl, vars)
 })
@@ -322,12 +354,17 @@ async function loadTemplateList() {
   }
 }
 
+function onBindingChange(varName: string, columnName: string) {
+  variableToColumn[varName] = columnName
+}
+
 async function onTemplateChange() {
   const id = selectedTemplateId.value
   if (!id) {
     loadedTemplate.value = null
     templateVariables.value = []
     currentTemplateZPL.value = ''
+    Object.keys(variableToColumn).forEach((k) => { variableToColumn[k] = '' })
     return
   }
   try {

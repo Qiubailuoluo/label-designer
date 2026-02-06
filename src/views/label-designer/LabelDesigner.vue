@@ -9,7 +9,11 @@
       @back="onBack"
     />
     <div class="designer-body">
-      <LabelDesignerLeftPanel @add-element="onAddElement" />
+      <LabelDesignerLeftPanel
+        :custom-variable-names="customVariableNames"
+        @add-element="onAddElement"
+        @add-custom-variable="onAddCustomVariable"
+      />
       <div class="canvas-area">
         <div v-if="pendingAdd" class="placement-hint">请在画布上点击以放置「{{ pendingAddName }}」</div>
         <DesignCanvas
@@ -23,6 +27,7 @@
       </div>
       <PropertiesPanel
         :element="selectedElement"
+        :custom-variable-names="customVariableNames"
         @update="onPropertyUpdate"
         @delete="onElementDelete"
       />
@@ -53,6 +58,7 @@ const canvasConfig = ref<CanvasConfig>({
   gridEnabled: true,
 })
 const elements = ref<DesignElement[]>([])
+const customVariableNames = ref<string[]>([])
 const selectedId = ref<string | null>(null)
 const pendingAdd = ref<Omit<DesignElement, 'id'> | null>(null)
 const pendingAddName = computed(() => pendingAdd.value?.name ?? '')
@@ -129,6 +135,29 @@ function onAddElement(partial: Omit<DesignElement, 'id'>) {
   pendingAdd.value = partial
 }
 
+/** 添加用户变量：生成 变量1、变量2… 并加入列表，再添加对应 variable 元素 */
+function onAddCustomVariable() {
+  const used = new Set(customVariableNames.value)
+  let n = 1
+  while (used.has(`变量${n}`)) n++
+  const name = `变量${n}`
+  customVariableNames.value = [...customVariableNames.value, name]
+  pendingAdd.value = {
+    type: 'variable',
+    name,
+    x: 15,
+    y: 15,
+    width: 80,
+    height: 18,
+    rotation: 0,
+    zIndex: 1,
+    visible: true,
+    dataField: name,
+    label: name + ':',
+    sampleValue: '',
+  } as Omit<DesignElement, 'id'>
+}
+
 function onCanvasClick(xMm: number, yMm: number) {
   if (!pendingAdd.value) return
   const partial = { ...pendingAdd.value, x: xMm, y: yMm }
@@ -165,6 +194,7 @@ async function onSave() {
       height: canvasConfig.value.height,
       config: canvasConfig.value,
       elements: elements.value,
+      customVariableNames: customVariableNames.value,
     })
     alert('保存成功')
     onBack()
@@ -185,6 +215,13 @@ async function loadInitial() {
     templateName.value = data.name
     canvasConfig.value = data.config
     elements.value = data.elements
+    const fromApi = data.customVariableNames ?? []
+    const fromElements = new Set<string>()
+    for (const el of data.elements) {
+      if (el.type === 'variable' && el.dataField && !['EPC', 'TID', 'User Data'].includes(el.dataField))
+        fromElements.add(el.dataField)
+    }
+    customVariableNames.value = [...new Set([...fromApi, ...fromElements])]
     selectedId.value = null
   } catch (e) {
     console.error(e)
