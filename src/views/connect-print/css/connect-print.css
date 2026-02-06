@@ -484,6 +484,11 @@
   border-color: #667eea;
 }
 
+.binding-rfid-hint {
+  margin: 12px 0 0 0;
+  font-size: 13px;
+}
+
 /* 模拟数据区块 */
 .simulate-section {
   border-top: 1px solid #e5e7eb;

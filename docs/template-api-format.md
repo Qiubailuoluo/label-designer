@@ -103,3 +103,14 @@
 - **不打算支持用户变量**：可以不存 `customVariableNames`，前端会从元素 `dataField` 推断；但若元素里已有 `变量1`、`变量2` 等，建议一并存，以便下次编辑时左侧列表一致。
 
 总结：**需要后端在模板 config 中支持并持久化 `customVariableNames` 与各元素的 `dataField`**；请求/响应体其余部分可与现有接口保持一致，按上表扩展即可。
+
+---
+
+## 4. RFID 变量（EPC / TID / User Data）与 ZPL
+
+- **EPC、TID、User Data** 视为「由打印机从 RFID 标签读取」的变量，**不从 Excel 绑定**。
+- 前端生成 ZPL 时，对绑定为 EPC/TID/User Data 的元素会输出：
+  - 格式开头：`^RS8` 及针对各类型的 `^RFR,<内存码>,0,<长度>,1^FNn^FS`（E=EPC→^FN1，H=TID→^FN2，U=User→^FN3）。
+  - 文本/变量元素：`^FO x,y ^A0N,...^FNn^FS`（用 ^FN 引用读取结果）。
+  - 条码元素：`^FO x,y ^BY...^BCN^FD^FNn^FS`（条码内容来自 ^FN）。
+- 连接打印页的「列绑定」中**不展示** EPC、TID、User Data，仅展示可绑定 Excel 的变量（如 变量1、变量2、条码等）。

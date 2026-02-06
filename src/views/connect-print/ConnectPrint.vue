@@ -171,11 +171,11 @@
           </div>
         </div>
 
-        <!-- 列绑定：每个可填变量选择对应的 Excel 列 -->
-        <div v-if="templateVariables.length > 0 && excelHeaders.length > 0" class="binding-section">
+        <!-- 列绑定：仅可绑定 Excel 的变量（EPC/TID/User Data 由 RFID 读取，不在此绑定） -->
+        <div v-if="templateVariables.length > 0" class="binding-section">
           <h4 class="zpl-section-title">列绑定</h4>
-          <p class="simulate-desc">将模板中的可填变量与 Excel 表头列绑定，用于替换 ZPL 占位符。</p>
-          <div class="binding-table-wrap">
+          <p class="simulate-desc">将可填变量与 Excel 表头列绑定。EPC、TID、User Data 由打印机从 RFID 标签读取，无需绑定。</p>
+          <div v-if="bindableVariables.length > 0 && excelHeaders.length > 0" class="binding-table-wrap">
             <table class="binding-table">
               <thead>
                 <tr>
@@ -184,7 +184,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="varName in templateVariables" :key="varName">
+                <tr v-for="varName in bindableVariables" :key="varName">
                   <td class="binding-var-name">{{ varName }}</td>
                   <td>
                     <select
@@ -200,6 +200,7 @@
               </tbody>
             </table>
           </div>
+          <p v-else-if="templateVariables.some(v => isRfidField(v))" class="text-muted binding-rfid-hint">当前模板仅使用 EPC/TID/User Data（由打印机从 RFID 标签读取），无需绑定 Excel 列。</p>
         </div>
 
         <!-- 生成的 ZPL：放在 Excel 展示区下方 -->
@@ -278,6 +279,7 @@ import {
   collectFillableVariables,
   buildImageZPLCache,
   substituteVariables,
+  isRfidField,
 } from './utils/zpl-generator'
 
 type ConnectionType = 'usb' | 'tcp'
@@ -308,6 +310,11 @@ const loading = ref(false)
 const simulateRowIndex = ref(0)
 /** 变量名 → Excel 列名（表头）的绑定 */
 const variableToColumn = reactive<Record<string, string>>({})
+
+/** 可绑定 Excel 的变量（排除 EPC、TID、User Data，它们由 RFID 读取） */
+const bindableVariables = computed(() =>
+  templateVariables.value.filter((v) => !isRfidField(v))
+)
 
 const excelInputRef = ref<HTMLInputElement | null>(null)
 const excelFileName = ref('')
