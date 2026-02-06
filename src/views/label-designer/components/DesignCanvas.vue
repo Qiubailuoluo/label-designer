@@ -283,19 +283,5 @@ watch(
 </script>
 
 <style scoped>
-.design-canvas-wrap {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #e8ecf1;
-}
-.design-canvas-container {
-  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-  background: #fff;
-}
-.design-canvas-container canvas {
-  display: block;
-}
+@import '../css/design-canvas.css';
 </style>

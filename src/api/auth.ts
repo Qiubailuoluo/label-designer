@@ -1,19 +1,7 @@
 import api from './index'
 import type { ApiResponse } from './index'
 
-// 登录接口的返回数据类型
-interface LoginData {
-  accessToken: string
-  userInfo: {
-    username: string
-    nickname: string
-  }
-}
-
-// 注册接口的返回数据类型（注册成功时data为null）
-interface RegisterData {
-  // 可以是空接口，表示data为null
-}
+//***************请求参数类型-登录，注册***************
 
 // 用户注册接口
 export const register = (data: {
@@ -36,3 +24,22 @@ export const login = (data: {
 export const logout = (): Promise<ApiResponse> => {
   return api.post('/auth/logout')
 }
+
+
+
+//***************响应返回类型-登录，注册***************
+
+// 登录接口的返回数据类型
+interface LoginData {
+  accessToken: string
+  userInfo: {
+    username: string
+    nickname: string
+  }
+}
+
+// 注册接口的返回数据类型（注册成功时data为null）
+interface RegisterData {
+  // 可以是空接口，表示data为null
+}
+
