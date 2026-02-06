@@ -55,7 +55,8 @@ const currentPageTitle = computed(() => {
     'Dashboard': '仪表盘',
     'Nothing': '功能页面',
     'UserInfo': '用户信息',
-    'TemplateSettings': '模板设置'
+    'TemplateList': '模板设置',
+    'LabelDesigner': '标签设计器'
   }
   return titles[routeName] || 'RFID标签设计系统'
 })

@@ -86,12 +86,12 @@ const userInitials = computed(() => {
   return username ? username.charAt(0).toUpperCase() : 'U'
 })
 
-// 菜单项
+// 菜单项：模板设置 = 标签设计模块列表，创建/编辑进入设计器
 const menuItems: MenuItem[] = [
   { path: '/dashboard', title: '仪表盘', icon: '🏠' },
+  { path: '/label-designer', title: '模板设置', icon: '🏷️' },
   { path: '/nothing', title: '功能页面', icon: '📄' },
-  { path: '/user-info', title: '用户信息', icon: '👤' },
-  { path: '/template-settings', title: '模板设置', icon: '⚙️' }
+  { path: '/user-info', title: '用户信息', icon: '👤' }
 ]
 </script>
 

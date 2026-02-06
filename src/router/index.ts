@@ -39,18 +39,16 @@ const router = createRouter({
           component: () => import('@/views/user-info/UserInfo.vue')
         },
         {
-          path: 'template-settings',
-          name: 'TemplateSettings',
-          component: () => import('@/views/template-settings/TemplateSettings.vue')
+          path: 'label-designer',
+          name: 'TemplateList',
+          component: () => import('@/views/label-designer/TemplateList.vue'),
+          meta: { requiresAuth: true, title: '模板设置' }
         },
-         {
-          path: 'template-design/:id?', // :id? 表示id是可选的
-          name: 'TemplateDesign',
-          component: () => import('@/views/template-settings/templatesetting-designer/DesignerView.vue'),
-          meta: { 
-            requiresAuth: true,
-            title: '标签设计器'
-          }
+        {
+          path: 'label-designer/design/:id?',
+          name: 'LabelDesigner',
+          component: () => import('@/views/label-designer/LabelDesigner.vue'),
+          meta: { requiresAuth: true, title: '标签设计器' }
         }
       ]
     },
