@@ -370,7 +370,7 @@ async function loadTemplateList() {
   } catch (e) {
     console.error(e)
     templateList.value = []
-    alert('加载模板列表失败，请稍后重试')
+    alert('加载模板列表失败：' + (e instanceof Error ? e.message : '请稍后重试'))
   } finally {
     loading.value = false
   }
@@ -409,7 +409,7 @@ async function onTemplateChange() {
     loadedTemplate.value = null
     templateVariables.value = []
     currentTemplateZPL.value = ''
-    alert('加载模板详情失败')
+    alert('加载模板详情失败：' + (e instanceof Error ? e.message : '请稍后重试'))
   } finally {
     loading.value = false
   }

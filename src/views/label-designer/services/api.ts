@@ -26,6 +26,25 @@ async function request(url: string, options: RequestInit = {}) {
   return res
 }
 
+/** 解析响应体：HTTP 非 2xx 或业务 code !== 200 时抛出，携带后端返回的 msg */
+async function parseResponse(res: Response): Promise<any> {
+  const text = await res.text()
+  let data: any = null
+  try {
+    if (text) data = JSON.parse(text)
+  } catch {
+    // 非 JSON 时用原文
+  }
+  if (!res.ok) {
+    const msg = data?.msg ?? data?.message ?? (text || res.statusText)
+    throw new Error(String(msg))
+  }
+  if (data != null && typeof data.code === 'number' && data.code !== 200) {
+    throw new Error(String(data.msg ?? data.message ?? '请求失败'))
+  }
+  return data
+}
+
 /** 将设计器元素转为后端 elements 数组的一项 */
 function elementToBackend(el: DesignElement): Record<string, unknown> {
   const base: Record<string, unknown> = {
@@ -117,8 +136,7 @@ export async function saveTemplate(payload: SavePayload): Promise<{ id: string }
     context: { userId: localStorage.getItem('userId') || 'unknown', clientId: 'web_client' },
   }
   const res = await request(`${BASE}/templates/save`, { method: 'POST', body: JSON.stringify(body) })
-  if (!res.ok) throw new Error(await res.text() || res.statusText)
-  const data = await res.json()
+  const data = await parseResponse(res)
   return { id: data?.data?.id ?? data?.id ?? payload.id ?? '' }
 }
 
@@ -213,8 +231,7 @@ export interface LoadedTemplate {
 //***************请求处理-加载模板***************
 export async function loadTemplate(id: string): Promise<LoadedTemplate> {
   const res = await request(`${BASE}/templates/${id}`)
-  if (!res.ok) throw new Error(await res.text() || res.statusText)
-  const json = await res.json()
+  const json = await parseResponse(res)
   const data = json?.data ?? json
   const config = data?.config ?? {}
   const canvas = config?.canvas ?? {}
@@ -248,8 +265,7 @@ export interface TemplateListItem {
 /** 获取模板列表 */
 export async function getTemplateList(): Promise<TemplateListItem[]> {
   const res = await request(`${BASE}/templates`)
-  if (!res.ok) throw new Error(await res.text() || res.statusText)
-  const json = await res.json()
+  const json = await parseResponse(res)
   const data = json?.data ?? json
   const list = Array.isArray(data?.list) ? data.list : []
   return list.map((t: any) => ({
@@ -263,5 +279,5 @@ export async function getTemplateList(): Promise<TemplateListItem[]> {
 /** 删除模板 */
 export async function deleteTemplate(id: string): Promise<void> {
   const res = await request(`${BASE}/templates/${id}`, { method: 'DELETE' })
-  if (!res.ok) throw new Error(await res.text() || res.statusText)
+  await parseResponse(res)
 }

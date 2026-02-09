@@ -63,6 +63,8 @@ function drawToFabric(elements: DesignElement[]) {
   const dpi = props.config.dpi || 300
   const { width, height } = getCanvasSize()
   fabricCanvas.setDimensions({ width, height })
+  containerRef.value.style.width = `${width}px`
+  containerRef.value.style.height = `${height}px`
   fabricCanvas.backgroundColor = props.config.backgroundColor
   fabricCanvas.clear()
 

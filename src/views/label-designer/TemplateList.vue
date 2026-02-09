@@ -67,7 +67,7 @@ const loadTemplates = async () => {
   } catch (e) {
     console.error(e)
     templates.value = []
-    alert('加载模板列表失败，请稍后重试')
+    alert('加载模板列表失败：' + (e instanceof Error ? e.message : '请稍后重试'))
   } finally {
     loading.value = false
   }
@@ -95,7 +95,7 @@ const deleteTemplate = async (id: string) => {
     alert('模板删除成功')
   } catch (e) {
     console.error(e)
-    alert('删除模板失败，请稍后重试')
+    alert('删除模板失败：' + (e instanceof Error ? e.message : '请稍后重试'))
   }
 }
 
