@@ -77,12 +77,16 @@ export function addConnection(payload: AddConnectionPayload): Promise<PrinterIte
   return sendRequest<PrinterItem>('ADD_CONNECTION', payload)
 }
 
-/** 发送单条 ZPL 到指定打印机 */
-export function printZPL(printerId: string, zpl: string): Promise<void> {
-  return sendRequest<void>('PRINT_ZPL', { printerId, zpl })
+/** 发送单条 ZPL 到指定打印机；系统打印机（id 以 win_ 开头）时需传 printerName */
+export function printZPL(printerId: string, zpl: string, printerName?: string): Promise<void> {
+  const payload: { printerId: string; zpl: string; printerName?: string } = { printerId, zpl }
+  if (printerName) payload.printerName = printerName
+  return sendRequest<void>('PRINT_ZPL', payload)
 }
 
-/** 批量发送多条 ZPL 到指定打印机（按顺序） */
-export function printZPLBatch(printerId: string, zplList: string[]): Promise<void> {
-  return sendRequest<void>('PRINT_ZPL_BATCH', { printerId, zplList })
+/** 批量发送多条 ZPL；系统打印机时需传 printerName */
+export function printZPLBatch(printerId: string, zplList: string[], printerName?: string): Promise<void> {
+  const payload: { printerId: string; zplList: string[]; printerName?: string } = { printerId, zplList }
+  if (printerName) payload.printerName = printerName
+  return sendRequest<void>('PRINT_ZPL_BATCH', payload)
 }

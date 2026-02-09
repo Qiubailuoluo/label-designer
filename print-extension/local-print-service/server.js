@@ -93,19 +93,47 @@ app.post('/connection', (req, res) => {
   res.json({ id, name, address });
 });
 
-// POST /print - 单条 ZPL
+/** Windows 系统打印机（含 USB）：通过 printer 包发送原始 ZPL */
+function sendZPLToWindowsPrinter(printerName, zpl) {
+  return new Promise((resolve, reject) => {
+    if (process.platform !== 'win32') return reject(new Error('仅 Windows 支持系统打印机原始打印'));
+    try {
+      const printer = require('printer');
+      printer.printDirect({
+        data: zpl,
+        printer: printerName,
+        type: 'RAW',
+        success: (jobId) => resolve(),
+        error: (err) => reject(err || new Error('打印失败')),
+      });
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+// POST /print - 单条 ZPL（支持 TCP/应用连接 或 系统打印机 win_* + printerName）
 app.post('/print', async (req, res) => {
-  const { printerId, zpl } = req.body || {};
+  const { printerId, zpl, printerName } = req.body || {};
   if (!printerId || zpl == null) {
     return res.status(400).json({ error: '缺少 printerId 或 zpl' });
   }
+  if (String(printerId).startsWith('win_')) {
+    if (!printerName) return res.status(400).json({ error: '系统打印机需传 printerName' });
+    try {
+      await sendZPLToWindowsPrinter(printerName, zpl);
+      return res.status(200).end();
+    } catch (e) {
+      return res.status(500).json({ error: e?.message || String(e) });
+    }
+  }
   const p = addedPrinters.find((x) => x.id === printerId);
-  if (!p) return res.status(404).json({ error: '打印机不存在或为系统打印机，请通过「应用连接」添加 TCP 打印机后打印' });
+  if (!p) return res.status(404).json({ error: '打印机不存在' });
   try {
     if (p.type === 'tcp') {
       await sendZPLToTCP(p.config.host, p.config.port, zpl, (p.config.timeout || 5) * 1000);
     } else {
-      return res.status(501).json({ error: 'USB 打印暂未实现，请使用 TCP 连接' });
+      return res.status(501).json({ error: 'USB 打印暂未实现，请使用 TCP 或选择系统打印机' });
     }
     res.status(200).end();
   } catch (e) {
@@ -115,12 +143,21 @@ app.post('/print', async (req, res) => {
 
 // POST /print/batch - 批量 ZPL
 app.post('/print/batch', async (req, res) => {
-  const { printerId, zplList } = req.body || {};
+  const { printerId, zplList, printerName } = req.body || {};
   if (!printerId || !Array.isArray(zplList)) {
     return res.status(400).json({ error: '缺少 printerId 或 zplList' });
   }
+  if (String(printerId).startsWith('win_')) {
+    if (!printerName) return res.status(400).json({ error: '系统打印机需传 printerName' });
+    try {
+      for (const zpl of zplList) await sendZPLToWindowsPrinter(printerName, zpl);
+      return res.status(200).end();
+    } catch (e) {
+      return res.status(500).json({ error: e?.message || String(e) });
+    }
+  }
   const p = addedPrinters.find((x) => x.id === printerId);
-  if (!p) return res.status(404).json({ error: '打印机不存在或为系统打印机' });
+  if (!p) return res.status(404).json({ error: '打印机不存在' });
   try {
     if (p.type === 'tcp') {
       const timeoutMs = (p.config.timeout || 5) * 1000;

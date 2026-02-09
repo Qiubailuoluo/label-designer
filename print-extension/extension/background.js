@@ -1,10 +1,11 @@
 /**
- * Background：根据 type 请求本地打印服务，将结果回传给 content script
- * 默认请求「前端本地」开发地址，便于先跑通测试；正式用本地打印服务时改为 PRINT_SERVICE_ORIGIN 或下方 8765
+ * Background：根据 type 请求打印接口（本地前端 mock 或 8765 真实服务）
+ * 当前使用「本地前端」：npm run dev 时 Vite 提供 /api/print/* 模拟，无需启动 Node 服务即可跑通流程。
+ * 真实打印时改为：'http://127.0.0.1:8765'
  */
-// 开发联调：请求前端 dev 的模拟接口（npm run dev 时 Vite 会提供 /api/print/* 模拟）
-const LOCAL_SERVICE = 'http://localhost:5173/api/print';
-// 使用独立本地打印服务时改为：'http://127.0.0.1:8765'，且 path 为 /printers、/connection、/print、/print/batch
+//const LOCAL_SERVICE = 'http://localhost:5173/api/print';
+const LOCAL_SERVICE = 'http://127.0.0.1:8765';
+
 
 function fetchLocal(path, options = {}) {
   const base = LOCAL_SERVICE;
@@ -50,7 +51,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (!payload?.printerId || payload?.zpl == null) throw new Error('缺少 printerId 或 zpl');
           const res = await fetchLocal('print', {
             method: 'POST',
-            body: JSON.stringify({ printerId: payload.printerId, zpl: payload.zpl }),
+            body: JSON.stringify(payload),
           });
           if (!res.ok) throw new Error(await res.text() || res.statusText);
           sendResponse({ success: true });
@@ -61,7 +62,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (!payload?.printerId || !Array.isArray(payload?.zplList)) throw new Error('缺少 printerId 或 zplList');
           const res = await fetchLocal('print/batch', {
             method: 'POST',
-            body: JSON.stringify({ printerId: payload.printerId, zplList: payload.zplList }),
+            body: JSON.stringify(payload),
           });
           if (!res.ok) throw new Error(await res.text() || res.statusText);
           sendResponse({ success: true });

@@ -522,7 +522,9 @@ async function doPrintCurrentRow() {
   }
   printBusy.value = true
   try {
-    await printZPL(selectedPrinter.value.id, zpl)
+    const pid = selectedPrinter.value.id
+    const pname = String(pid).startsWith('win_') ? selectedPrinter.value.name : undefined
+    await printZPL(pid, zpl, pname)
     alert('已发送打印')
   } catch (e) {
     console.error(e)
@@ -538,7 +540,9 @@ async function doPrintBatch() {
   const zplList = batchZPLFromRows(currentTemplateZPL.value, excelRows.value, columnToVariable)
   printBusy.value = true
   try {
-    await printZPLBatch(selectedPrinter.value.id, zplList)
+    const pid = selectedPrinter.value.id
+    const pname = String(pid).startsWith('win_') ? selectedPrinter.value.name : undefined
+    await printZPLBatch(pid, zplList, pname)
     alert('已发送批量打印：' + zplList.length + ' 张')
   } catch (e) {
     console.error(e)
