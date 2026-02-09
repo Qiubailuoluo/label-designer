@@ -1,0 +1,12 @@
+{
+  "name": "connect-print-local-service",
+  "version": "1.0.0",
+  "description": "本地打印服务：接收 ZPL 并发送到 TCP/USB 打印机",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

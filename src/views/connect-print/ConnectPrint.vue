@@ -13,10 +13,15 @@
         </div>
       </div>
       <div class="printer-list">
-        <div v-if="localPrinters.length === 0" class="empty-printers">
+        <div v-if="!extensionAvailable" class="empty-printers extension-hint">
+          <span class="empty-icon">🔌</span>
+          <p>未检测到打印扩展</p>
+          <p class="hint">云部署需安装「连接打印扩展」并运行本地打印服务，详见文档</p>
+        </div>
+        <div v-else-if="localPrinters.length === 0" class="empty-printers">
           <span class="empty-icon">🖨️</span>
           <p>暂无打印机</p>
-          <p class="hint">请确保已安装打印插件并点击「刷新打印机列表」获取本地打印机</p>
+          <p class="hint">点击「应用连接」添加 TCP/USB，或点击「刷新打印机列表」</p>
         </div>
         <div
           v-for="p in filteredPrinters"
@@ -84,6 +89,7 @@
             <button type="button" class="btn-primary" @click="applyConnection">应用连接</button>
             <button type="button" class="btn-secondary" @click="refreshPrinters">刷新打印机列表</button>
           </div>
+          <p v-if="extensionAvailable" class="connection-status">打印扩展已连接</p>
         </div>
       </section>
 
@@ -249,11 +255,29 @@
               <button type="button" class="btn-secondary btn-sm copy-zpl-btn" @click="copySimulatedZPL">
                 复制模拟 ZPL
               </button>
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                :disabled="!selectedPrinter || printBusy"
+                @click="doPrintCurrentRow"
+              >
+                {{ printBusy ? '打印中…' : '打印当前行' }}
+              </button>
             </template>
             <p v-else-if="currentTemplateZPL && excelRows.length === 0" class="text-muted">
               请先导入 Excel，即可用表头对应列的数据替换占位符并预览
             </p>
             <p v-else class="text-muted">请先选择模板并导入 Excel 后查看模拟数据</p>
+          </div>
+          <div v-if="currentTemplateZPL && excelRows.length > 0 && selectedPrinter" class="batch-print-bar">
+            <button
+              type="button"
+              class="btn-primary"
+              :disabled="printBusy"
+              @click="doPrintBatch"
+            >
+              {{ printBusy ? '打印中…' : '批量打印（' + excelRows.length + ' 张）' }}
+            </button>
           </div>
         </div>
       </section>
@@ -280,7 +304,14 @@ import {
   buildImageZPLCache,
   substituteVariables,
   isRfidField,
+  batchZPLFromRows,
 } from './utils/zpl-generator'
+import {
+  getPrinters,
+  addConnection,
+  printZPL,
+  printZPLBatch,
+} from './utils/print-bridge'
 
 const CONNECT_PRINT_CACHE_KEY = 'connectPrintCache'
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000 // 4 小时
@@ -304,6 +335,9 @@ interface PrinterItem {
   name: string
   address?: string
 }
+
+const extensionAvailable = ref(false)
+const printBusy = ref(false)
 
 const connectionType = ref<ConnectionType>('tcp')
 const config = reactive({
@@ -415,17 +449,36 @@ async function onTemplateChange() {
   }
 }
 
-function applyConnection() {
-  if (connectionType.value === 'usb') {
-    console.log('应用 USB 连接', config.usb)
-  } else {
-    console.log('应用 TCP 连接', config.tcp)
+async function applyConnection() {
+  if (!extensionAvailable.value) {
+    alert('请先安装并启用打印扩展')
+    return
+  }
+  try {
+    const added = await addConnection({
+      connectionType: connectionType.value,
+      config: { usb: { ...config.usb }, tcp: { ...config.tcp } },
+    })
+    localPrinters.value = [...localPrinters.value, added]
+    alert('已添加连接：' + added.name)
+  } catch (e) {
+    console.error(e)
+    alert('应用连接失败：' + (e instanceof Error ? e.message : String(e)))
   }
 }
 
-function refreshPrinters() {
-  localPrinters.value = []
-  console.log('刷新打印机列表（需配合插件实现）')
+/** @param silent 为 true 时不弹窗（用于进入页面时自动拉取），仅更新列表与扩展状态 */
+async function refreshPrinters(silent = false) {
+  try {
+    const list = await getPrinters()
+    localPrinters.value = Array.isArray(list) ? (list as PrinterItem[]) : []
+    extensionAvailable.value = true
+  } catch (e) {
+    console.error(e)
+    localPrinters.value = []
+    extensionAvailable.value = false
+    if (!silent) alert('刷新打印机列表失败：' + (e instanceof Error ? e.message : String(e)))
+  }
 }
 
 function selectPrinter(p: PrinterItem) {
@@ -448,6 +501,51 @@ function copySimulatedZPL() {
     () => alert('模拟 ZPL 已复制到剪贴板'),
     () => alert('复制失败，请手动选择文本框内容复制')
   )
+}
+
+/** 变量名 → Excel 列（用于批量生成） */
+function getColumnToVariable(): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const varName of templateVariables.value) {
+    const col = variableToColumn[varName]
+    if (col && col.trim()) out[col] = varName
+  }
+  return out
+}
+
+async function doPrintCurrentRow() {
+  if (!selectedPrinter.value || !currentTemplateZPL.value) return
+  const zpl = simulatedZPL.value
+  if (!zpl) {
+    alert('无可用 ZPL，请选择模板并导入 Excel')
+    return
+  }
+  printBusy.value = true
+  try {
+    await printZPL(selectedPrinter.value.id, zpl)
+    alert('已发送打印')
+  } catch (e) {
+    console.error(e)
+    alert('打印失败：' + (e instanceof Error ? e.message : String(e)))
+  } finally {
+    printBusy.value = false
+  }
+}
+
+async function doPrintBatch() {
+  if (!selectedPrinter.value || !currentTemplateZPL.value || !excelRows.value.length) return
+  const columnToVariable = getColumnToVariable()
+  const zplList = batchZPLFromRows(currentTemplateZPL.value, excelRows.value, columnToVariable)
+  printBusy.value = true
+  try {
+    await printZPLBatch(selectedPrinter.value.id, zplList)
+    alert('已发送批量打印：' + zplList.length + ' 张')
+  } catch (e) {
+    console.error(e)
+    alert('批量打印失败：' + (e instanceof Error ? e.message : String(e)))
+  } finally {
+    printBusy.value = false
+  }
 }
 
 function onExcelFileChange(e: Event) {
@@ -521,6 +619,8 @@ function loadConnectPrintCache(): ConnectPrintCache | null {
 }
 
 async function initPage() {
+  // 进入页面时直接尝试拉取打印机列表，成功即视为扩展可用，避免 PING 超时导致不自动拉取
+  await refreshPrinters(true)
   await loadTemplateList()
   const cached = loadConnectPrintCache()
   if (!cached) return

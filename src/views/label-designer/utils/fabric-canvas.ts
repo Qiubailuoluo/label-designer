@@ -234,8 +234,11 @@ export function getUpdatesFromFabricObject(obj: fabric.Object, dpi: number, geom
     const scaleY = (obj.scaleY ?? 1) as number
     const lenPx = Math.sqrt((w * scaleX) ** 2 + (h * scaleY) ** 2)
     const rad = (angle * Math.PI) / 180
-    const startX = left - (lenPx / 2) * Math.cos(rad)
-    const startY = top - (lenPx / 2) * Math.sin(rad)
+    // Fabric Line 的 left/top 为 bbox 左上角（origin 为 left/top 时），中心 = 左上角 + 旋转后的 (w/2, h/2)
+    const centerX = left + (w * scaleX / 2) * Math.cos(rad) - (h * scaleY / 2) * Math.sin(rad)
+    const centerY = top + (w * scaleX / 2) * Math.sin(rad) + (h * scaleY / 2) * Math.cos(rad)
+    const startX = centerX - (lenPx / 2) * Math.cos(rad)
+    const startY = centerY - (lenPx / 2) * Math.sin(rad)
     const lineUpdates: Partial<DesignElement> = {
       id,
       x: round2(pxToMm(startX, dpi)),
@@ -244,10 +247,8 @@ export function getUpdatesFromFabricObject(obj: fabric.Object, dpi: number, geom
       height: 0,
       rotation: round2(angle),
     }
-    if (obj instanceof fabric.Line) {
-      ;(lineUpdates as any).stroke = obj.stroke
-      ;(lineUpdates as any).strokeWidth = obj.strokeWidth ?? 1
-    }
+    ;(lineUpdates as any).stroke = obj.stroke
+    ;(lineUpdates as any).strokeWidth = obj.strokeWidth ?? 1
     return lineUpdates
   }
 

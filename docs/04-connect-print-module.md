@@ -87,6 +87,8 @@ RFID 在 ZPL 中的约定：
 | 本地打印机发现/选择（USB/驱动） | ConnectPrint.vue + 可选插件或 native 桥 | 当前 refreshPrinters/selectPrinter 为占位，实际列表需由本地打印插件或系统 API 提供后在此对接。 |
 | 连接参数校验、TCP 测试连接等 | ConnectPrint.vue 或 `connect-print/utils/` 下新建 | 例如新建 `connection.ts` 做校验与测试，Vue 中调用。 |
 
+**云部署与打印扩展**：前端通过 `print-bridge.ts` 与浏览器扩展（postMessage）通信，扩展再请求用户本机的「本地打印服务」完成 ZPL 下发。契约、接口及扩展实现见 [connect-print-extension-handover.md](./connect-print-extension-handover.md)，根目录 `print-extension/` 提供扩展与本地服务示例实现。
+
 保持「模板数据与 API」与「ZPL 生成」分离：模板来自 label-designer 的 types 与 api；ZPL 只依赖这些数据结构，便于单测与复用。
 
 ---

@@ -12,7 +12,7 @@
       <LabelDesignerLeftPanel
         :custom-variable-names="customVariableNames"
         @add-element="onAddElement"
-        @add-custom-variable="onAddCustomVariable"
+        @add-custom-variable="onAddCustomVariable($event)"
       />
       <div class="canvas-area">
         <div v-if="pendingAdd" class="placement-hint">请在画布上点击以放置「{{ pendingAddName }}」</div>
@@ -135,13 +135,15 @@ function onAddElement(partial: Omit<DesignElement, 'id'>) {
   pendingAdd.value = partial
 }
 
-/** 添加用户变量：生成 变量1、变量2… 并加入列表，再添加对应 variable 元素 */
-function onAddCustomVariable() {
+/** 添加用户变量：若传入名称则使用（可自定义），否则生成 变量1、变量2…，加入列表并添加对应 variable 元素 */
+function onAddCustomVariable(customName?: string) {
   const used = new Set(customVariableNames.value)
   let n = 1
   while (used.has(`变量${n}`)) n++
-  const name = `变量${n}`
-  customVariableNames.value = [...customVariableNames.value, name]
+  const name = (customName != null && String(customName).trim() !== '') ? String(customName).trim() : `变量${n}`
+  if (!customVariableNames.value.includes(name)) {
+    customVariableNames.value = [...customVariableNames.value, name]
+  }
   pendingAdd.value = {
     type: 'variable',
     name,

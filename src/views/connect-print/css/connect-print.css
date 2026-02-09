@@ -218,6 +218,12 @@
   margin-left: auto;
 }
 
+.connection-status {
+  margin: 8px 0 0 0;
+  font-size: 12px;
+  color: #059669;
+}
+
 .btn-primary {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -425,6 +431,14 @@
 
 .copy-zpl-btn {
   align-self: flex-start;
+}
+
+.batch-print-bar {
+  margin-top: 12px;
+}
+
+.left-printer-sidebar .empty-printers.extension-hint .hint {
+  color: #f59e0b;
 }
 
 /* 列绑定区块 */

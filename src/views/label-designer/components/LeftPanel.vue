@@ -44,7 +44,7 @@
           <span class="variable-icon">📌</span>
           {{ name }}
         </button>
-        <button type="button" class="add-variable-btn" @click="emit('add-custom-variable')">
+        <button type="button" class="add-variable-btn" @click="onAddCustomVariableClick">
           + 添加变量
         </button>
       </div>
@@ -61,7 +61,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'add-element': [element: Omit<DesignElement, 'id'>]
-  'add-custom-variable': []
+  'add-custom-variable': [name?: string]
 }>()
 
 const layoutTools: { type: ElementType; name: string; icon: string; defaults: Record<string, unknown> }[] = [
@@ -126,6 +126,16 @@ function addCustomVariableElement(varName: string) {
     label: varName + ':',
     sampleValue: '',
   } as Omit<DesignElement, 'id'>)
+}
+
+function onAddCustomVariableClick() {
+  const used = new Set(props.customVariableNames)
+  let n = 1
+  while (used.has(`变量${n}`)) n++
+  const defaultName = `变量${n}`
+  const input = window.prompt('输入变量名称（留空则使用默认 ' + defaultName + '）：', defaultName)
+  const name = (input != null && input.trim() !== '') ? input.trim() : defaultName
+  emit('add-custom-variable', name)
 }
 </script>
 
