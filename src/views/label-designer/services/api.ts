@@ -6,6 +6,7 @@ import type { DesignElement, CanvasConfig } from '../types'
 
 const BASE = 'http://localhost:8080/api'
 
+//***************请求头处理***************
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem('accessToken')
   const h: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -13,6 +14,7 @@ function authHeaders(): HeadersInit {
   return h
 }
 
+//***************请求处理***************
 async function request(url: string, options: RequestInit = {}) {
   const res = await fetch(url, { ...options, headers: { ...authHeaders(), ...(options.headers as object) } })
   if (res.status === 401 || res.status === 403) {
@@ -74,6 +76,7 @@ function elementToBackend(el: DesignElement): Record<string, unknown> {
   return base
 }
 
+//***************请求参数类型-保存模板***************
 export interface SavePayload {
   id?: string
   name: string
@@ -85,6 +88,7 @@ export interface SavePayload {
   customVariableNames?: string[]
 }
 
+//***************请求处理-保存模板***************
 export async function saveTemplate(payload: SavePayload): Promise<{ id: string }> {
   const body = {
     template: {
@@ -194,6 +198,7 @@ function backendElementToDesign(el: any): DesignElement {
   return { ...base, type: 'text', content: '', fontSize: 12, fontFamily: 'Arial', color: '#000', textAlign: 'left', bold: false, italic: false } as DesignElement
 }
 
+//***************请求参数类型-加载模板***************
 export interface LoadedTemplate {
   id: string
   name: string
@@ -205,6 +210,7 @@ export interface LoadedTemplate {
   customVariableNames: string[]
 }
 
+//***************请求处理-加载模板***************
 export async function loadTemplate(id: string): Promise<LoadedTemplate> {
   const res = await request(`${BASE}/templates/${id}`)
   if (!res.ok) throw new Error(await res.text() || res.statusText)
