@@ -57,6 +57,19 @@ function getWindowsPrinterPort(printerName) {
   }
 }
 
+/** Windows 下根据端口名查使用该端口的系统打印机名，无则返回 null */
+function getWindowsPrinterNameByPort(portName) {
+  if (process.platform !== 'win32' || !portName || !String(portName).trim()) return null;
+  try {
+    const port = String(portName).trim().replace(/'/g, "''");
+    const cmd = `powershell -NoProfile -Command "(Get-Printer | Where-Object { $_.PortName -eq '${port}' } | Select-Object -First 1 -ExpandProperty Name)"`;
+    const out = execSync(cmd, { encoding: 'utf8', windowsHide: true, timeout: 5000 });
+    return (out && out.trim()) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 /** 从 Windows 端口名解析出 IP（如 IP_192.168.1.100 或 192.168.1.100） */
 function parsePortToIP(portName) {
   if (!portName || typeof portName !== 'string') return null;
@@ -65,6 +78,32 @@ function parsePortToIP(portName) {
   if (!ipMatch) return null;
   const ip = ipMatch[1] || ipMatch[0];
   return /^\d+\.\d+\.\d+\.\d+$/.test(ip) ? ip : null;
+}
+
+/** 向 USB/COM/LPT 端口直写 ZPL（应用连接添加的 USB 打印机） */
+function sendZPLToUSB(portName, zpl) {
+  if (!portName || !portName.trim()) {
+    throw new Error('USB 端口未配置，请在应用连接中填写设备/端口（如 COM3、USB001）');
+  }
+  const port = portName.trim();
+  const tmpPath = path.join(os.tmpdir(), `zpl-usb-${Date.now()}-${Math.random().toString(36).slice(2)}.zpl`);
+  try {
+    // 末尾加换行，部分 Zebra 固件依赖此才执行
+    const zplWithNewline = (zpl && !/\n\s*$/.test(zpl)) ? zpl + '\n' : zpl;
+    fs.writeFileSync(tmpPath, zplWithNewline, 'utf8');
+    const scriptPath = path.join(__dirname, 'send-raw-to-port.ps1');
+    execSync('powershell', [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath,
+      '-PortName', port, '-FilePath', tmpPath,
+    ], { encoding: 'utf8', timeout: 15000, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    console.log('[打印] USB/端口 %s 直写成功', port);
+  } catch (e) {
+    const stderr = (e.stderr && String(e.stderr).trim()) || '';
+    const msg = stderr || e?.message || 'USB 端口直写失败';
+    throw new Error(msg);
+  } finally {
+    try { fs.unlinkSync(tmpPath); } catch (_) {}
+  }
 }
 
 function sendZPLToTCP(host, port, zpl, timeoutMs = 5000) {
@@ -130,7 +169,7 @@ app.post('/connection', (req, res) => {
   res.json({ id, name, address });
 });
 
-/** Windows 系统打印机：优先端口直连（网络 TCP / USB 直写），失败再走驱动队列 */
+/** Windows 系统打印机：网络端口走 TCP 直连，USB/COM 走驱动队列（直写 USB 常被驱动占用且不出纸） */
 async function sendZPLToWindowsPrinter(printerName, zpl) {
   if (process.platform !== 'win32') {
     throw new Error('仅 Windows 支持系统打印机原始打印');
@@ -152,20 +191,7 @@ async function sendZPLToWindowsPrinter(printerName, zpl) {
       }
     }
 
-    // 2) USB/COM/LPT 尝试直写端口（部分环境可绕过驱动）
-    if (portName && /^(USB\d+|COM\d+|LPT\d+)$/i.test(portName.trim())) {
-      const portScriptPath = path.join(__dirname, 'send-raw-to-port.ps1');
-      try {
-        execSync('powershell', [
-          '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', portScriptPath,
-          '-PortName', portName.trim(), '-FilePath', tmpPath,
-        ], { encoding: 'utf8', timeout: 15000, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-        console.log('[打印] 已通过端口 %s 直写', portName);
-        return;
-      } catch (portErr) {
-        console.warn('[打印] 端口直写失败，回退驱动:', portErr?.message || portErr);
-      }
-    }
+    // 2) 系统打印机接在 USB/COM 时不再直写端口（端口多被驱动占用，直写常“成功”但不出纸），统一走驱动队列
 
     // 3) 走驱动队列（OpenPrinter + WritePrinter）；若队列仍无任务，可改用 TCP「应用连接」该打印机
     const scriptPath = path.join(__dirname, 'send-raw-print.ps1');
@@ -174,6 +200,9 @@ async function sendZPLToWindowsPrinter(printerName, zpl) {
       '-PrinterName', printerName, '-FilePath', tmpPath,
     ], { encoding: 'utf8', timeout: 30000, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     console.log('[打印] 已通过驱动队列提交（端口: %s）', portName || '未知');
+    if (portName && /^USB\d+$/i.test(portName.trim())) {
+      console.warn('[打印] 若队列无任务且未出纸：建议改用 TCP（打印机 IP:9100）连接打印，更稳定。');
+    }
   } catch (e) {
     const stderr = (e.stderr && String(e.stderr).trim()) || '';
     const msg = stderr || e?.message || '打印失败';
@@ -209,8 +238,19 @@ app.post('/print', async (req, res) => {
   try {
     if (p.type === 'tcp') {
       await sendZPLToTCP(p.config.host, p.config.port, zpl, (p.config.timeout || 5) * 1000);
+    } else if (p.type === 'usb') {
+      const port = p.config.port;
+      const sysPrinter = getWindowsPrinterNameByPort(port);
+      if (sysPrinter) {
+        const isZebra = /zd|zebra|zdesigner/i.test(sysPrinter);
+        const zplToSend = isZebra ? ('${\n' + zpl + '\n}$') : zpl;
+        await sendZPLToWindowsPrinter(sysPrinter, zplToSend);
+        console.log('[打印] USB 端口 %s 已转交系统打印机「%s」驱动队列', port, sysPrinter);
+      } else {
+        sendZPLToUSB(port, zpl);
+      }
     } else {
-      return res.status(501).json({ error: 'USB 打印暂未实现，请使用 TCP 或选择系统打印机' });
+      return res.status(501).json({ error: '不支持的打印机类型' });
     }
     res.status(200).end();
   } catch (e) {
@@ -245,8 +285,23 @@ app.post('/print/batch', async (req, res) => {
       for (const zpl of zplList) {
         await sendZPLToTCP(p.config.host, p.config.port, zpl, timeoutMs);
       }
+    } else if (p.type === 'usb') {
+      const port = p.config.port;
+      const sysPrinter = getWindowsPrinterNameByPort(port);
+      if (sysPrinter) {
+        const isZebra = /zd|zebra|zdesigner/i.test(sysPrinter);
+        for (const zpl of zplList) {
+          const zplToSend = isZebra ? ('${\n' + zpl + '\n}$') : zpl;
+          await sendZPLToWindowsPrinter(sysPrinter, zplToSend);
+        }
+        console.log('[打印] 批量 USB 端口 %s 已转交系统打印机「%s」驱动队列', port, sysPrinter);
+      } else {
+        for (const zpl of zplList) {
+          sendZPLToUSB(port, zpl);
+        }
+      }
     } else {
-      return res.status(501).json({ error: 'USB 打印暂未实现' });
+      return res.status(501).json({ error: '不支持的打印机类型' });
     }
     res.status(200).end();
   } catch (e) {
