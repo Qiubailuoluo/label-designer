@@ -29,6 +29,18 @@ const RFID_ZPL_MAP: Record<string, { rfr: string; fn: number }> = {
   'User Data': { rfr: 'U', fn: 3 },
 }
 
+/** 设计器字体名 -> ZPL ^A 字体代号（0=默认, D=SimSun/宋体, E=Swiss Unicode） */
+export const ZPL_FONT_MAP: Record<string, string> = {
+  'ZEBRA 0': '0',
+  'ZEBRA SimSun': 'D',
+  'ZEBRA Swiss Unicode': 'E',
+}
+
+function getZPLFontCode(fontFamily: string | undefined): string {
+  if (!fontFamily) return '0'
+  return ZPL_FONT_MAP[fontFamily] ?? '0'
+}
+
 export function mmToDots(mm: number, dpi: number): number {
   return Math.round((mm / 25.4) * dpi)
 }
@@ -135,14 +147,16 @@ export function templateToZPL(
         const fontSize = t.fontSize ?? 12
         const fontHeight = Math.max(10, Math.round((fontSize / 72) * dpi))
         const fontWidth = Math.round(fontHeight * 0.6)
+        const fontCode = getZPLFontCode(t.fontFamily)
+        const aCmd = `^A${fontCode}N,${fontHeight},${fontWidth}`
         if (t.dataField && isRfidField(t.dataField)) {
           const fn = RFID_ZPL_MAP[t.dataField]?.fn ?? 1
-          parts.push(`^FO${x},${y}^RO${rot}^A0N,${fontHeight},${fontWidth}^FN${fn}^FS`)
+          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FN${fn}^FS`)
         } else if (t.dataField && usePlaceholder) {
-          parts.push(`^FO${x},${y}^RO${rot}^A0N,${fontHeight},${fontWidth}^FD${VARIABLE_PLACEHOLDER_PREFIX}${t.dataField}${VARIABLE_PLACEHOLDER_SUFFIX}^FS`)
+          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FD${VARIABLE_PLACEHOLDER_PREFIX}${t.dataField}${VARIABLE_PLACEHOLDER_SUFFIX}^FS`)
         } else {
           const content = (t.content ?? '').trim() || ' '
-          parts.push(`^FO${x},${y}^RO${rot}^A0N,${fontHeight},${fontWidth}^FD${escapeFieldData(content)}^FS`)
+          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FD${escapeFieldData(content)}^FS`)
         }
         break
       }
@@ -152,33 +166,48 @@ export function templateToZPL(
         const fontSize = 12
         const fontHeight = Math.max(10, Math.round((fontSize / 72) * dpi))
         const fontWidth = Math.round(fontHeight * 0.6)
+        const fontCode = getZPLFontCode((v as unknown as { fontFamily?: string }).fontFamily)
+        const aCmd = `^A${fontCode}N,${fontHeight},${fontWidth}`
         if (isRfidField(field)) {
           const fn = RFID_ZPL_MAP[field]?.fn ?? 2
-          parts.push(`^FO${x},${y}^RO${rot}^A0N,${fontHeight},${fontWidth}^FN${fn}^FS`)
+          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FN${fn}^FS`)
         } else if (usePlaceholder) {
-          parts.push(`^FO${x},${y}^RO${rot}^A0N,${fontHeight},${fontWidth}^FD${VARIABLE_PLACEHOLDER_PREFIX}${field}${VARIABLE_PLACEHOLDER_SUFFIX}^FS`)
+          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FD${VARIABLE_PLACEHOLDER_PREFIX}${field}${VARIABLE_PLACEHOLDER_SUFFIX}^FS`)
         } else {
-          parts.push(`^FO${x},${y}^RO${rot}^A0N,${fontHeight},${fontWidth}^FD${escapeFieldData(v.sampleValue ?? '')}^FS`)
+          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FD${escapeFieldData(v.sampleValue ?? '')}^FS`)
         }
         break
       }
       case 'barcode': {
         const b = el as BarcodeElement
-        const barHeight = Math.max(20, hEl)
-        const format = (b.format ?? 'CODE128').toUpperCase()
-        if (b.dataField && isRfidField(b.dataField)) {
-          const fn = RFID_ZPL_MAP[b.dataField]?.fn ?? 1
-          const bc = format === 'CODE39' || format === 'CODE 39' ? 'B3N' : 'BCN'
-          parts.push(`^FO${x},${y}^RO${rot}^BY2,2,${barHeight}^${bc}^FD^FN${fn}^FS`)
-        } else {
-          const barKey = b.dataField || (barcodeIndex === 0 ? BARCODE_PLACEHOLDER_BASE : `${BARCODE_PLACEHOLDER_BASE}_${barcodeIndex}`)
-          if (!b.dataField) barcodeIndex++
+        const format = (b.format ?? 'CODE128').toUpperCase().replace(/\s/g, '')
+        const isQR = format === 'QR' || format === 'QRCODE'
+        if (isQR) {
           const data = usePlaceholder
-            ? `${VARIABLE_PLACEHOLDER_PREFIX}${barKey}${VARIABLE_PLACEHOLDER_SUFFIX}`
+            ? (b.dataField
+                ? `${VARIABLE_PLACEHOLDER_PREFIX}${b.dataField}${VARIABLE_PLACEHOLDER_SUFFIX}`
+                : (barcodeIndex === 0 ? `${VARIABLE_PLACEHOLDER_PREFIX}${BARCODE_PLACEHOLDER_BASE}${VARIABLE_PLACEHOLDER_SUFFIX}` : `${VARIABLE_PLACEHOLDER_PREFIX}${BARCODE_PLACEHOLDER_BASE}_${barcodeIndex}${VARIABLE_PLACEHOLDER_SUFFIX}`))
             : (b.content ?? '').trim() || '0'
+          if (!b.dataField && !usePlaceholder) barcodeIndex++
           const escaped = usePlaceholder ? data : escapeFieldData(data)
-          const bc = format === 'CODE39' || format === 'CODE 39' ? 'B3N' : 'BCN'
-          parts.push(`^FO${x},${y}^RO${rot}^BY2,2,${barHeight}^${bc}^FD${escaped}^FS`)
+          const mag = Math.max(1, Math.min(10, Math.round(Math.min(wEl, hEl) / 20)))
+          parts.push(`^FO${x},${y}^RO${rot}^BQN,2,${mag},Q^FDMM,${escaped}^FS`)
+        } else {
+          const barHeight = Math.max(20, hEl)
+          if (b.dataField && isRfidField(b.dataField)) {
+            const fn = RFID_ZPL_MAP[b.dataField]?.fn ?? 1
+            const bc = format === 'CODE39' || format === 'CODE39' ? 'B3N' : 'BCN'
+            parts.push(`^FO${x},${y}^RO${rot}^BY2,2,${barHeight}^${bc}^FD^FN${fn}^FS`)
+          } else {
+            const barKey = b.dataField || (barcodeIndex === 0 ? BARCODE_PLACEHOLDER_BASE : `${BARCODE_PLACEHOLDER_BASE}_${barcodeIndex}`)
+            if (!b.dataField) barcodeIndex++
+            const data = usePlaceholder
+              ? `${VARIABLE_PLACEHOLDER_PREFIX}${barKey}${VARIABLE_PLACEHOLDER_SUFFIX}`
+              : (b.content ?? '').trim() || '0'
+            const escaped = usePlaceholder ? data : escapeFieldData(data)
+            const bc = format === 'CODE39' ? 'B3N' : 'BCN'
+            parts.push(`^FO${x},${y}^RO${rot}^BY2,2,${barHeight}^${bc}^FD${escaped}^FS`)
+          }
         }
         break
       }

@@ -213,7 +213,7 @@ function backendElementToDesign(el: any): DesignElement {
       sampleValue: el.sampleValue ?? '',
     } as DesignElement
   }
-  return { ...base, type: 'text', content: '', fontSize: 12, fontFamily: 'Arial', color: '#000', textAlign: 'left', bold: false, italic: false } as DesignElement
+  return { ...base, type: 'text', content: '', fontSize: 12, fontFamily: 'ZEBRA 0', color: '#000', textAlign: 'left', bold: false, italic: false } as DesignElement
 }
 
 //***************请求参数类型-加载模板***************

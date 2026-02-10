@@ -34,6 +34,13 @@ const defaultOpts = {
   transparentCorners: false,
 }
 
+/** ZEBRA 字体在设计器画布上的回退显示字体（浏览器无 ZEBRA 内置字体） */
+const ZEBRA_DISPLAY_FONT: Record<string, string> = {
+  'ZEBRA 0': 'Arial',
+  'ZEBRA SimSun': 'SimSun, "Microsoft YaHei", serif',
+  'ZEBRA Swiss Unicode': 'Arial, Helvetica, sans-serif',
+}
+
 function setElementMeta(obj: fabric.Object, id: string, type: string) {
   obj.set('elementId', id)
   obj.set('elementType', type)
@@ -48,7 +55,7 @@ function applyTextSize(obj: fabric.Object, targetW: number, targetH: number) {
   }
 }
 
-/** 生成条码并返回 Fabric 图片对象，用于替换画布上的条码占位 */
+/** 生成条码或二维码并返回 Fabric 图片对象，用于替换画布上的条码占位 */
 export async function loadBarcodeObject(
   content: string,
   format: string,
@@ -64,18 +71,29 @@ export async function loadBarcodeObject(
   if (!FabricImage || !FabricImage.fromURL) {
     throw new Error('FabricImage.fromURL not available')
   }
-  const JsBarcodeModule = await import('jsbarcode')
-  const JsBarcode = (JsBarcodeModule as unknown as { default?: (el: HTMLCanvasElement, text: string, opts?: Record<string, unknown>) => void }).default ?? JsBarcodeModule
-  const canvas = document.createElement('canvas')
   const formatNorm = (format || 'CODE128').toUpperCase().replace(/\s/g, '')
-  ;(JsBarcode as (el: HTMLCanvasElement, text: string, opts?: Record<string, unknown>) => void)(canvas, (content || '0').trim() || '0', {
-    format: formatNorm === 'CODE39' || formatNorm === 'CODE 39' ? 'CODE39' : formatNorm,
-    width: 2,
-    height: Math.max(20, h * 0.6),
-    displayValue: false,
-    margin: 2,
-  })
-  const dataUrl = canvas.toDataURL('image/png')
+  const isQR = formatNorm === 'QR' || formatNorm === 'QRCODE'
+  let dataUrl: string
+  if (isQR) {
+    const qrcode = await import('qrcode')
+    const toDataURL = (qrcode as { toDataURL: (t: string, opts?: { width?: number; margin?: number }) => Promise<string> }).toDataURL
+    dataUrl = await toDataURL((content || '0').trim() || '0', {
+      width: Math.max(100, Math.min(800, Math.round(Math.min(w, h) * 2))),
+      margin: 1,
+    })
+  } else {
+    const JsBarcodeModule = await import('jsbarcode')
+    const JsBarcode = (JsBarcodeModule as unknown as { default?: (el: HTMLCanvasElement, text: string, opts?: Record<string, unknown>) => void }).default ?? JsBarcodeModule
+    const canvas = document.createElement('canvas')
+    ;(JsBarcode as (el: HTMLCanvasElement, text: string, opts?: Record<string, unknown>) => void)(canvas, (content || '0').trim() || '0', {
+      format: formatNorm === 'CODE39' ? 'CODE39' : formatNorm,
+      width: 2,
+      height: Math.max(20, h * 0.6),
+      displayValue: false,
+      margin: 2,
+    })
+    dataUrl = canvas.toDataURL('image/png')
+  }
   const img = await FabricImage.fromURL(dataUrl, { crossOrigin: 'anonymous' })
   const iw = (img as any).width ?? 1
   const ih = (img as any).height ?? 1
@@ -137,6 +155,7 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
   switch (element.type) {
     case 'text': {
       const el = element as TextElement
+      const displayFont = ZEBRA_DISPLAY_FONT[el.fontFamily ?? ''] ?? el.fontFamily ?? 'Arial'
       const TextboxClass = (fabric as any).Textbox
       const text = TextboxClass
         ? new TextboxClass(el.content || '文本', {
@@ -145,7 +164,7 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
             width: w,
             fontSize: el.fontSize ?? 12,
             fill: el.color ?? '#000000',
-            fontFamily: el.fontFamily ?? 'Arial',
+            fontFamily: displayFont,
             textAlign: el.textAlign ?? 'left',
             fontWeight: el.bold ? 'bold' : 'normal',
             fontStyle: el.italic ? 'italic' : 'normal',
@@ -157,7 +176,7 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
             top: y,
             fontSize: el.fontSize ?? 12,
             fill: el.color ?? '#000000',
-            fontFamily: el.fontFamily ?? 'Arial',
+            fontFamily: displayFont,
             textAlign: el.textAlign ?? 'left',
             fontWeight: el.bold ? 'bold' : 'normal',
             fontStyle: el.italic ? 'italic' : 'normal',
@@ -356,7 +375,6 @@ export function getUpdatesFromFabricObject(obj: fabric.Object, dpi: number, geom
       content: obj.text,
       fontSize: obj.fontSize,
       color: obj.fill,
-      fontFamily: obj.fontFamily,
       textAlign: obj.textAlign,
       bold: obj.fontWeight === 'bold',
       italic: obj.fontStyle === 'italic',

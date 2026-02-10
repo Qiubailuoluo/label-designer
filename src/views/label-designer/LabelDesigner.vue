@@ -98,7 +98,7 @@ function normalizeElement(partial: Omit<DesignElement, 'id'>, existingElements: 
     const t = merged as any
     if (t.content === undefined) t.content = '文本'
     if (t.fontSize === undefined) t.fontSize = 12
-    if (t.fontFamily === undefined) t.fontFamily = 'Microsoft YaHei'
+    if (t.fontFamily === undefined) t.fontFamily = 'ZEBRA 0'
     if (t.color === undefined) t.color = '#000000'
     if (t.textAlign === undefined) t.textAlign = 'left'
     if (t.bold === undefined) t.bold = false
