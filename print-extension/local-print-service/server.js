@@ -204,9 +204,10 @@ async function sendZPLToWindowsPrinter(printerName, zpl) {
       try {
         execSync(`schtasks /query /tn "${TASK_NAME}"`, { stdio: 'pipe', windowsHide: true });
       } catch (_) {
-        const tr = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + runScriptPath + '"';
-        execSync('schtasks /create /tn "' + TASK_NAME + '" /tr "' + tr.replace(/"/g, '\\"') + '" /sc once /st 00:00 /f', { encoding: 'utf8', windowsHide: true, cwd: __dirname });
-        console.log('[打印] 已创建计划任务 %s（用于在用户会话中执行打印）', TASK_NAME);
+        const setupPath = path.join(__dirname, 'setup-print-task.bat');
+        throw new Error(
+          '未找到打印计划任务。请先在本机运行一次：' + setupPath + '（仅需一次，可减少安全软件误报）'
+        );
       }
     }
 
