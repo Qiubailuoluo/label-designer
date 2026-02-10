@@ -141,8 +141,11 @@ app.post('/print', async (req, res) => {
   if (String(printerId).startsWith('win_')) {
     if (!printerName) return res.status(400).json({ error: '系统打印机需传 printerName' });
     try {
-      console.log('[打印] 打印机名=%s, ZPL长度=%d', printerName, (zpl || '').length);
-      await sendZPLToWindowsPrinter(printerName, zpl);
+      // Zebra/ZDesigner 驱动常需 Passthrough 分隔符，否则任务可能不进队列或不出纸
+      const isZebra = /zd|zebra|zdesigner/i.test(String(printerName));
+      const zplToSend = isZebra ? ('${\n' + zpl + '\n}$') : zpl;
+      console.log('[打印] 打印机名=%s, ZPL长度=%d%s', printerName, (zplToSend || '').length, isZebra ? ' (Passthrough)' : '');
+      await sendZPLToWindowsPrinter(printerName, zplToSend);
       console.log('[打印] 已提交到系统打印队列');
       return res.status(200).end();
     } catch (e) {
@@ -173,7 +176,11 @@ app.post('/print/batch', async (req, res) => {
   if (String(printerId).startsWith('win_')) {
     if (!printerName) return res.status(400).json({ error: '系统打印机需传 printerName' });
     try {
-      for (const zpl of zplList) await sendZPLToWindowsPrinter(printerName, zpl);
+      const isZebra = /zd|zebra|zdesigner/i.test(String(printerName));
+      for (const zpl of zplList) {
+        const zplToSend = isZebra ? ('${\n' + zpl + '\n}$') : zpl;
+        await sendZPLToWindowsPrinter(printerName, zplToSend);
+      }
       return res.status(200).end();
     } catch (e) {
       return res.status(500).json({ error: e?.message || String(e) });

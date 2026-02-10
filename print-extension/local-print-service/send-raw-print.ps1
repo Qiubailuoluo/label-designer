@@ -32,12 +32,14 @@ public class RawPrinter {
     public string pDataType;
   }
   public static string SendBytesToPrinter(string printerName, byte[] bytes) {
+    if (bytes == null || bytes.Length == 0) return "ZPL 数据为空";
     IntPtr hPrinter = IntPtr.Zero;
     DOC_INFO_1 di = new DOC_INFO_1();
     di.pDocName = "ZPL Label";
+    di.pOutputFile = null;
     di.pDataType = "RAW";
-    if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) return "OpenPrinter 失败，请确认打印机名称正确且未脱机。错误码: " + GetLastError();
-    if (!StartDocPrinter(hPrinter, 1, ref di)) { ClosePrinter(hPrinter); return "StartDocPrinter 失败: " + GetLastError(); }
+    if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) return "OpenPrinter 失败，错误码: " + GetLastError();
+    if (!StartDocPrinter(hPrinter, 1, ref di)) { uint err = GetLastError(); ClosePrinter(hPrinter); return "StartDocPrinter 失败: " + err; }
     if (!StartPagePrinter(hPrinter)) { EndDocPrinter(hPrinter); ClosePrinter(hPrinter); return "StartPagePrinter 失败"; }
     IntPtr pUnmanagedBytes = Marshal.AllocCoTaskMem(bytes.Length);
     Marshal.Copy(bytes, 0, pUnmanagedBytes, bytes.Length);
@@ -47,7 +49,9 @@ public class RawPrinter {
     EndPagePrinter(hPrinter);
     EndDocPrinter(hPrinter);
     ClosePrinter(hPrinter);
-    return ok ? null : ("WritePrinter 失败，已写入 " + written + " 字节");
+    if (!ok) return "WritePrinter 失败，错误码: " + GetLastError();
+    if (written != bytes.Length) return "WritePrinter 未写满: 期望 " + bytes.Length + " 实际 " + written;
+    return null;
   }
 }
 "@

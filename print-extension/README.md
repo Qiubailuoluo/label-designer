@@ -129,6 +129,11 @@ npm run dev
 
 4. 若提示「刷新打印机列表失败」或「打印失败」，请确认：本地打印服务已启动、打印机已开机且未脱机、Zebra 驱动已安装。
 
+5. **Zebra/ZDesigner 系统打印机：任务已提交但队列无任务、未出纸**
+   - 本服务对打印机名含 ZD/Zebra/ZDesigner 的会自动加 Passthrough 分隔符 `${ ... }$`。
+   - 若仍无效，请在打印机上右键 → **打印首选项** → **高级/其他** 中开启 **「Passthrough 模式」**（或 ZPL Passthrough），起止序列设为 `${` 与 `}$`。
+   - 或在 **打印机属性 → 高级** 中尝试「直接打印到打印机」与「使用后台打印」切换后重试。
+
 ## 通信与接口
 
 详见项目根目录 `docs/connect-print-extension-handover.md`。
