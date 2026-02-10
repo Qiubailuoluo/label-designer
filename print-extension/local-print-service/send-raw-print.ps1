@@ -1,5 +1,5 @@
-# 向 Windows 打印机发送原始 ZPL（不依赖 node 原生模块）
-# 用法: .\send-raw-print.ps1 -PrinterName "打印机名称" -FilePath "C:\path\to\zpl.txt"
+# 向 Windows 打印机发送原始 ZPL（与 Python win32print 流程一致：OpenPrinter -> StartDocPrinter(1, ("ZPL Label", None, "RAW")) -> StartPage -> WritePrinter(bytes) -> EndPage -> EndDoc -> Close）
+# 用法: .\send-raw-print.ps1 -PrinterName "打印机名称" -FilePath "C:\path\to\zpl.zpl"
 param(
   [Parameter(Mandatory=$true)][string]$PrinterName,
   [Parameter(Mandatory=$true)][string]$FilePath
@@ -36,9 +36,9 @@ public class RawPrinter {
     IntPtr hPrinter = IntPtr.Zero;
     DOC_INFO_1 di = new DOC_INFO_1();
     di.pDocName = "ZPL Label";
-    di.pOutputFile = null;
+    di.pOutputFile = null;  /* None = 打印到打印机，与 Python win32print 一致 */
     di.pDataType = "RAW";
-    if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) return "OpenPrinter 失败，错误码: " + GetLastError();
+    if (!OpenPrinter(printerName.Trim(), out hPrinter, IntPtr.Zero)) return "OpenPrinter 失败，错误码: " + GetLastError();
     if (!StartDocPrinter(hPrinter, 1, ref di)) { uint err = GetLastError(); ClosePrinter(hPrinter); return "StartDocPrinter 失败: " + err; }
     if (!StartPagePrinter(hPrinter)) { EndDocPrinter(hPrinter); ClosePrinter(hPrinter); return "StartPagePrinter 失败"; }
     IntPtr pUnmanagedBytes = Marshal.AllocCoTaskMem(bytes.Length);
@@ -48,6 +48,7 @@ public class RawPrinter {
     Marshal.FreeCoTaskMem(pUnmanagedBytes);
     EndPagePrinter(hPrinter);
     EndDocPrinter(hPrinter);
+    System.Threading.Thread.Sleep(400);
     ClosePrinter(hPrinter);
     if (!ok) return "WritePrinter 失败，错误码: " + GetLastError();
     if (written != bytes.Length) return "WritePrinter 未写满: 期望 " + bytes.Length + " 实际 " + written;

@@ -176,7 +176,8 @@ async function sendZPLToWindowsPrinter(printerName, zpl) {
   }
   const tmpPath = path.join(os.tmpdir(), `zpl-${Date.now()}-${Math.random().toString(36).slice(2)}.zpl`);
   try {
-    fs.writeFileSync(tmpPath, zpl, 'utf8');
+    // 纯 UTF-8 字节写入，无 BOM
+    fs.writeFileSync(tmpPath, Buffer.from(zpl, 'utf8'));
     const portName = getWindowsPrinterPort(printerName);
 
     // 1) 端口为 IP 时直连 9100 发 ZPL，避免驱动假成功、队列无任务
@@ -191,21 +192,53 @@ async function sendZPLToWindowsPrinter(printerName, zpl) {
       }
     }
 
-    // 2) 系统打印机接在 USB/COM 时不再直写端口（端口多被驱动占用，直写常“成功”但不出纸），统一走驱动队列
+    // 2) 系统打印机接在 USB/COM 时不再直写端口
 
-    // 3) 走驱动队列（OpenPrinter + WritePrinter）；若队列仍无任务，可改用 TCP「应用连接」该打印机
-    const scriptPath = path.join(__dirname, 'send-raw-print.ps1');
-    execSync('powershell', [
-      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath,
-      '-PrinterName', printerName, '-FilePath', tmpPath,
-    ], { encoding: 'utf8', timeout: 30000, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    console.log('[打印] 已通过驱动队列提交（端口: %s）', portName || '未知');
-    if (portName && /^USB\d+$/i.test(portName.trim())) {
-      console.warn('[打印] 若队列无任务且未出纸：建议改用 TCP（打印机 IP:9100）连接打印，更稳定。');
+    // 3) 走驱动队列。手动 CMD 跑脚本能出纸、Node 子进程不能 → 通过计划任务在用户会话中执行（与手动一致）
+    const printerNameTrimmed = String(printerName).trim();
+    const requestPath = path.join(os.tmpdir(), 'zpl-print-request.json');
+    const runScriptPath = path.join(__dirname, 'run-print-job.ps1');
+    const TASK_NAME = 'ZPLPrintFromNode';
+
+    function ensureTask() {
+      try {
+        execSync(`schtasks /query /tn "${TASK_NAME}"`, { stdio: 'pipe', windowsHide: true });
+      } catch (_) {
+        const tr = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + runScriptPath + '"';
+        execSync('schtasks /create /tn "' + TASK_NAME + '" /tr "' + tr.replace(/"/g, '\\"') + '" /sc once /st 00:00 /f', { encoding: 'utf8', windowsHide: true, cwd: __dirname });
+        console.log('[打印] 已创建计划任务 %s（用于在用户会话中执行打印）', TASK_NAME);
+      }
     }
+
+    async function waitForRequestDone(timeoutMs) {
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        try {
+          fs.accessSync(requestPath);
+        } catch (_) {
+          return true;
+        }
+        await sleep(200);
+      }
+      return false;
+    }
+
+    ensureTask();
+    fs.writeFileSync(requestPath, JSON.stringify({ printerName: printerNameTrimmed, zplPath: tmpPath }), 'utf8');
+    try {
+      execSync(`schtasks /run /tn "${TASK_NAME}"`, { encoding: 'utf8', timeout: 5000, windowsHide: true });
+    } catch (e) {
+      try { fs.unlinkSync(requestPath); } catch (_) {}
+      throw new Error('启动打印任务失败: ' + (e?.message || e));
+    }
+    if (!(await waitForRequestDone(15000))) {
+      try { fs.unlinkSync(requestPath); } catch (_) {}
+      throw new Error('打印任务未在 15 秒内完成，请检查计划任务是否被禁用');
+    }
+    console.log('[打印] 已通过计划任务提交（端口: %s）', portName || '未知');
   } catch (e) {
-    const stderr = (e.stderr && String(e.stderr).trim()) || '';
-    const msg = stderr || e?.message || '打印失败';
+    const msg = e?.message || '打印失败';
     throw new Error(msg);
   } finally {
     try { fs.unlinkSync(tmpPath); } catch (_) {}
@@ -221,11 +254,9 @@ app.post('/print', async (req, res) => {
   if (String(printerId).startsWith('win_')) {
     if (!printerName) return res.status(400).json({ error: '系统打印机需传 printerName' });
     try {
-      // Zebra/ZDesigner 驱动常需 Passthrough 分隔符，否则任务可能不进队列或不出纸
-      const isZebra = /zd|zebra|zdesigner/i.test(String(printerName));
-      const zplToSend = isZebra ? ('${\n' + zpl + '\n}$') : zpl;
-      console.log('[打印] 打印机名=%s, ZPL长度=%d%s', printerName, (zplToSend || '').length, isZebra ? ' (Passthrough)' : '');
-      await sendZPLToWindowsPrinter(printerName, zplToSend);
+      // 与 Python win32print 一致：发纯 ZPL + UTF-8，不加 Passthrough（StartDocPrinter RAW）
+      console.log('[打印] 打印机名=%s, ZPL长度=%d', printerName, (zpl || '').length);
+      await sendZPLToWindowsPrinter(printerName, zpl);
       console.log('[打印] 已提交到系统打印队列');
       return res.status(200).end();
     } catch (e) {
@@ -242,9 +273,7 @@ app.post('/print', async (req, res) => {
       const port = p.config.port;
       const sysPrinter = getWindowsPrinterNameByPort(port);
       if (sysPrinter) {
-        const isZebra = /zd|zebra|zdesigner/i.test(sysPrinter);
-        const zplToSend = isZebra ? ('${\n' + zpl + '\n}$') : zpl;
-        await sendZPLToWindowsPrinter(sysPrinter, zplToSend);
+        await sendZPLToWindowsPrinter(sysPrinter, zpl);
         console.log('[打印] USB 端口 %s 已转交系统打印机「%s」驱动队列', port, sysPrinter);
       } else {
         sendZPLToUSB(port, zpl);
@@ -267,10 +296,8 @@ app.post('/print/batch', async (req, res) => {
   if (String(printerId).startsWith('win_')) {
     if (!printerName) return res.status(400).json({ error: '系统打印机需传 printerName' });
     try {
-      const isZebra = /zd|zebra|zdesigner/i.test(String(printerName));
       for (const zpl of zplList) {
-        const zplToSend = isZebra ? ('${\n' + zpl + '\n}$') : zpl;
-        await sendZPLToWindowsPrinter(printerName, zplToSend);
+        await sendZPLToWindowsPrinter(printerName, zpl);
       }
       return res.status(200).end();
     } catch (e) {
@@ -289,10 +316,8 @@ app.post('/print/batch', async (req, res) => {
       const port = p.config.port;
       const sysPrinter = getWindowsPrinterNameByPort(port);
       if (sysPrinter) {
-        const isZebra = /zd|zebra|zdesigner/i.test(sysPrinter);
         for (const zpl of zplList) {
-          const zplToSend = isZebra ? ('${\n' + zpl + '\n}$') : zpl;
-          await sendZPLToWindowsPrinter(sysPrinter, zplToSend);
+          await sendZPLToWindowsPrinter(sysPrinter, zpl);
         }
         console.log('[打印] 批量 USB 端口 %s 已转交系统打印机「%s」驱动队列', port, sysPrinter);
       } else {
