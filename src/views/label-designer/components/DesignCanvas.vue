@@ -10,7 +10,7 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as fabric from 'fabric'
 import type { CanvasConfig, DesignElement } from '../types'
-import { mmToPx, pxToMm, createFabricObject, getUpdatesFromFabricObject, loadImageObject } from '../utils/fabric-canvas'
+import { mmToPx, pxToMm, createFabricObject, getUpdatesFromFabricObject, loadImageObject, loadBarcodeObject } from '../utils/fabric-canvas'
 
 const props = defineProps<{
   config: CanvasConfig
@@ -88,6 +88,25 @@ function drawToFabric(elements: DesignElement[]) {
             fabricCanvas.remove(oldObj)
             fabricCanvas.add(imgObj)
             if (props.selectedId === el.id) fabricCanvas.setActiveObject(imgObj)
+            fabricCanvas.requestRenderAll()
+          }
+        })
+        .catch(() => {})
+    }
+    if (el.type === 'barcode') {
+      const x = mmToPx(el.x, dpi)
+      const y = mmToPx(el.y, dpi)
+      const w = mmToPx(el.width, dpi)
+      const h = mmToPx(el.height, dpi)
+      const b = el as any
+      loadBarcodeObject(b.content ?? '0', b.format ?? 'CODE128', x, y, w, h, el.rotation ?? 0, dpi, el.id)
+        .then((barObj) => {
+          if (!fabricCanvas) return
+          const oldObj = fabricCanvas.getObjects().find((o: fabric.Object) => o.get('elementId') === el.id)
+          if (oldObj) {
+            fabricCanvas.remove(oldObj)
+            fabricCanvas.add(barObj)
+            if (props.selectedId === el.id) fabricCanvas.setActiveObject(barObj)
             fabricCanvas.requestRenderAll()
           }
         })
@@ -273,6 +292,8 @@ watch(
   () => ({
     contentKey: props.elements.map(e => `${e.id}:${contentSignature(e)}`).join('|'),
     geometryKey: props.elements.map(e => geometryKey(e)).join('|'),
+    visibilityKey: props.elements.map(e => `${e.id}:${e.visible}`).join('|'),
+    zIndexKey: props.elements.map(e => `${e.id}:${e.zIndex}`).join('|'),
   }),
   () => fullSyncFromState(),
   { deep: true }

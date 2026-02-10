@@ -10,9 +10,13 @@
     />
     <div class="designer-body">
       <LabelDesignerLeftPanel
+        :elements="elements"
+        :selected-id="selectedId"
         :custom-variable-names="customVariableNames"
         @add-element="onAddElement"
         @add-custom-variable="onAddCustomVariable($event)"
+        @select="selectedId = $event"
+        @element-update="(p) => onElementUpdate(p.id, p.updates)"
       />
       <div class="canvas-area">
         <div v-if="pendingAdd" class="placement-hint">请在画布上点击以放置「{{ pendingAddName }}」</div>
@@ -73,9 +77,10 @@ function genId() {
   return `el_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 }
 
-/** 补齐元素必填字段并生成 id */
-function normalizeElement(partial: Omit<DesignElement, 'id'>): DesignElement {
+/** 补齐元素必填字段并生成 id；新元素 zIndex 置为当前最大+1，保证在最上层 */
+function normalizeElement(partial: Omit<DesignElement, 'id'>, existingElements: DesignElement[]): DesignElement {
   const id = genId()
+  const maxZ = existingElements.length ? Math.max(0, ...existingElements.map((e) => e.zIndex)) : 0
   const base = {
     id,
     type: partial.type,
@@ -85,7 +90,7 @@ function normalizeElement(partial: Omit<DesignElement, 'id'>): DesignElement {
     width: partial.width ?? 50,
     height: partial.height ?? 20,
     rotation: partial.rotation ?? 0,
-    zIndex: partial.zIndex ?? 1,
+    zIndex: partial.zIndex ?? maxZ + 1,
     visible: partial.visible !== false,
   }
   const merged = { ...base, ...partial, id } as DesignElement
@@ -164,7 +169,7 @@ function onCanvasClick(xMm: number, yMm: number) {
   if (!pendingAdd.value) return
   const partial = { ...pendingAdd.value, x: xMm, y: yMm }
   pendingAdd.value = null
-  const el = normalizeElement(partial)
+  const el = normalizeElement(partial, elements.value)
   elements.value.push(el)
   selectedId.value = el.id
 }

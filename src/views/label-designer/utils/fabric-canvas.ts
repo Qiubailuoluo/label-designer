@@ -3,7 +3,7 @@
  * 只做两件事：元素 → Fabric 对象；Fabric 对象 → 更新差量（由父组件合并到唯一数据源）
  */
 import * as fabric from 'fabric'
-import type { DesignElement, CanvasConfig } from '../types'
+import type { DesignElement } from '../types'
 import type { TextElement, RectElement, LineElement, EllipseElement } from '../types'
 
 const DPI = 300
@@ -39,13 +39,58 @@ function setElementMeta(obj: fabric.Object, id: string, type: string) {
   obj.set('elementType', type)
 }
 
-/** 对文本类对象按目标像素宽高设置 scale，使拖拽/属性面板修改的宽高在重画时生效 */
+/** 对文本类对象按目标像素宽高设置 scale（仅用于 variable/barcode 等非主文本），使拖拽时宽高生效 */
 function applyTextSize(obj: fabric.Object, targetW: number, targetH: number) {
   const nw = (obj.width ?? 0) as number
   const nh = (obj.height ?? 0) as number
   if (targetW > 0 && targetH > 0 && nw > 0 && nh > 0) {
     obj.set({ scaleX: targetW / nw, scaleY: targetH / nh })
   }
+}
+
+/** 生成条码并返回 Fabric 图片对象，用于替换画布上的条码占位 */
+export async function loadBarcodeObject(
+  content: string,
+  format: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  angle: number,
+  _dpi: number,
+  elementId: string
+): Promise<fabric.Object> {
+  const FabricImage = (fabric as any).FabricImage ?? (fabric as any).Image
+  if (!FabricImage || !FabricImage.fromURL) {
+    throw new Error('FabricImage.fromURL not available')
+  }
+  const JsBarcodeModule = await import('jsbarcode')
+  const JsBarcode = (JsBarcodeModule as unknown as { default?: (el: HTMLCanvasElement, text: string, opts?: Record<string, unknown>) => void }).default ?? JsBarcodeModule
+  const canvas = document.createElement('canvas')
+  const formatNorm = (format || 'CODE128').toUpperCase().replace(/\s/g, '')
+  ;(JsBarcode as (el: HTMLCanvasElement, text: string, opts?: Record<string, unknown>) => void)(canvas, (content || '0').trim() || '0', {
+    format: formatNorm === 'CODE39' || formatNorm === 'CODE 39' ? 'CODE39' : formatNorm,
+    width: 2,
+    height: Math.max(20, h * 0.6),
+    displayValue: false,
+    margin: 2,
+  })
+  const dataUrl = canvas.toDataURL('image/png')
+  const img = await FabricImage.fromURL(dataUrl, { crossOrigin: 'anonymous' })
+  const iw = (img as any).width ?? 1
+  const ih = (img as any).height ?? 1
+  const scaleX = w / iw
+  const scaleY = h / ih
+  img.set({
+    left: x,
+    top: y,
+    angle,
+    scaleX,
+    scaleY,
+    ...defaultOpts,
+  })
+  setElementMeta(img, elementId, 'barcode')
+  return img
 }
 
 /** 异步加载图片并返回 Fabric 图片对象，用于替换画布上的图片占位 */
@@ -56,7 +101,7 @@ export function loadImageObject(
   w: number,
   h: number,
   angle: number,
-  dpi: number,
+  _dpi: number,
   elementId: string
 ): Promise<fabric.Object> {
   const FabricImage = (fabric as any).FabricImage ?? (fabric as any).Image
@@ -92,19 +137,46 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
   switch (element.type) {
     case 'text': {
       const el = element as TextElement
-      const text = new fabric.Text(el.content || '文本', {
-        left: x,
-        top: y,
-        fontSize: el.fontSize ?? 12,
-        fill: el.color ?? '#000000',
-        fontFamily: el.fontFamily ?? 'Arial',
-        textAlign: el.textAlign ?? 'left',
-        fontWeight: el.bold ? 'bold' : 'normal',
-        fontStyle: el.italic ? 'italic' : 'normal',
-        ...defaultOpts,
-      })
+      const TextboxClass = (fabric as any).Textbox
+      const text = TextboxClass
+        ? new TextboxClass(el.content || '文本', {
+            left: x,
+            top: y,
+            width: w,
+            fontSize: el.fontSize ?? 12,
+            fill: el.color ?? '#000000',
+            fontFamily: el.fontFamily ?? 'Arial',
+            textAlign: el.textAlign ?? 'left',
+            fontWeight: el.bold ? 'bold' : 'normal',
+            fontStyle: el.italic ? 'italic' : 'normal',
+            splitByGrapheme: true,
+            ...defaultOpts,
+          })
+        : new (fabric as any).FabricText(el.content || '文本', {
+            left: x,
+            top: y,
+            fontSize: el.fontSize ?? 12,
+            fill: el.color ?? '#000000',
+            fontFamily: el.fontFamily ?? 'Arial',
+            textAlign: el.textAlign ?? 'left',
+            fontWeight: el.bold ? 'bold' : 'normal',
+            fontStyle: el.italic ? 'italic' : 'normal',
+            ...defaultOpts,
+          })
       setElementMeta(text, element.id, 'text')
-      applyTextSize(text, w, h)
+      if (TextboxClass) {
+        const clipRect = new fabric.Rect({
+          left: -w / 2,
+          top: -h / 2,
+          width: w,
+          height: h,
+          originX: 'left',
+          originY: 'top',
+        })
+        text.set({ clipPath: clipRect })
+      } else {
+        applyTextSize(text, w, h)
+      }
       return text
     }
 
@@ -173,17 +245,20 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
     }
 
     case 'barcode': {
-      const v = element as any
-      const text = new fabric.Text(String(v.content || 'barcode'), {
+      const placeholder = new fabric.Rect({
         left: x,
         top: y,
-        fontSize: 10,
-        fill: '#333',
+        width: w,
+        height: h,
+        angle,
+        fill: '#f5f5f5',
+        stroke: '#ccc',
+        strokeWidth: 1,
+        strokeDashArray: [4, 4],
         ...defaultOpts,
       })
-      setElementMeta(text, element.id, 'barcode')
-      applyTextSize(text, w, h)
-      return text
+      setElementMeta(placeholder, element.id, 'barcode')
+      return placeholder
     }
 
     case 'image': {
@@ -193,7 +268,7 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
         width: w,
         height: h,
         angle,
-        fill: 'transparent',
+        fill: '#e8e8e8',
         stroke: '#ccc',
         strokeWidth: 1,
         strokeDashArray: [4, 4],
@@ -252,12 +327,24 @@ export function getUpdatesFromFabricObject(obj: fabric.Object, dpi: number, geom
     return lineUpdates
   }
 
-  const actualW = width * scaleX
-  const actualH = height * scaleY
+  const objAny = obj as fabric.Object & { setCoords?: () => void; getBoundingRect?: () => { width: number; height: number }; getScaledWidth?: () => number; getScaledHeight?: () => number }
+  let actualLeft = left
+  let actualTop = top
+  let actualW = width * scaleX
+  let actualH = height * scaleY
+  if (type === 'text' && typeof objAny.setCoords === 'function' && typeof objAny.getBoundingRect === 'function') {
+    objAny.setCoords()
+    const br = objAny.getBoundingRect()
+    actualW = br.width
+    actualH = br.height
+  } else {
+    actualW = (typeof objAny.getScaledWidth === 'function' ? objAny.getScaledWidth() : actualW)
+    actualH = (typeof objAny.getScaledHeight === 'function' ? objAny.getScaledHeight() : actualH)
+  }
   const updates: Partial<DesignElement> = {
     id,
-    x: round2(pxToMm(left, dpi)),
-    y: round2(pxToMm(top, dpi)),
+    x: round2(pxToMm(actualLeft, dpi)),
+    y: round2(pxToMm(actualTop, dpi)),
     width: round2(pxToMm(actualW, dpi)),
     height: round2(pxToMm(actualH, dpi)),
     rotation: round2(angle),
