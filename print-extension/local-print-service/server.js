@@ -5,7 +5,18 @@
 const express = require('express');
 const net = require('net');
 const { execSync } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const app = express();
+// 允许浏览器扩展/页面跨域请求（本地服务仅监听 127.0.0.1）
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 app.use(express.json({ limit: '10mb' }));
 
 const PORT = process.env.PRINT_SERVICE_PORT || 8765;
@@ -56,9 +67,12 @@ function sendZPLToTCP(host, port, zpl, timeoutMs = 5000) {
 
 // GET /printers：系统打印机 + 已添加的连接
 app.get('/printers', (req, res) => {
+  console.log('[GET /printers] 收到请求');
   const systemList = getWindowsPrinterList();
   const addedList = addedPrinters.map((p) => ({ id: p.id, name: p.name, address: p.address }));
-  res.json({ list: [...systemList, ...addedList] });
+  const list = [...systemList, ...addedList];
+  console.log('[GET /printers] 返回 %d 台打印机', list.length);
+  res.json({ list });
 });
 
 // POST /connection - 添加连接为打印机
@@ -93,23 +107,29 @@ app.post('/connection', (req, res) => {
   res.json({ id, name, address });
 });
 
-/** Windows 系统打印机（含 USB）：通过 printer 包发送原始 ZPL */
+/** Windows 系统打印机（含 USB）：PowerShell + .NET 发送原始 ZPL，不依赖 node 原生模块 */
 function sendZPLToWindowsPrinter(printerName, zpl) {
-  return new Promise((resolve, reject) => {
-    if (process.platform !== 'win32') return reject(new Error('仅 Windows 支持系统打印机原始打印'));
-    try {
-      const printer = require('printer');
-      printer.printDirect({
-        data: zpl,
-        printer: printerName,
-        type: 'RAW',
-        success: (jobId) => resolve(),
-        error: (err) => reject(err || new Error('打印失败')),
-      });
-    } catch (e) {
-      reject(e);
-    }
-  });
+  if (process.platform !== 'win32') {
+    return Promise.reject(new Error('仅 Windows 支持系统打印机原始打印'));
+  }
+  const scriptPath = path.join(__dirname, 'send-raw-print.ps1');
+  const tmpPath = path.join(os.tmpdir(), `zpl-${Date.now()}-${Math.random().toString(36).slice(2)}.zpl`);
+  try {
+    fs.writeFileSync(tmpPath, zpl, 'utf8');
+    execSync('powershell', [
+      '-NoProfile',
+      '-ExecutionPolicy', 'Bypass',
+      '-File', scriptPath,
+      '-PrinterName', printerName,
+      '-FilePath', tmpPath,
+    ], { encoding: 'utf8', timeout: 30000, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch (e) {
+    const stderr = (e.stderr && String(e.stderr).trim()) || '';
+    const msg = stderr || e?.message || '打印失败';
+    throw new Error(msg);
+  } finally {
+    try { fs.unlinkSync(tmpPath); } catch (_) {}
+  }
 }
 
 // POST /print - 单条 ZPL（支持 TCP/应用连接 或 系统打印机 win_* + printerName）
@@ -121,9 +141,12 @@ app.post('/print', async (req, res) => {
   if (String(printerId).startsWith('win_')) {
     if (!printerName) return res.status(400).json({ error: '系统打印机需传 printerName' });
     try {
+      console.log('[打印] 打印机名=%s, ZPL长度=%d', printerName, (zpl || '').length);
       await sendZPLToWindowsPrinter(printerName, zpl);
+      console.log('[打印] 已提交到系统打印队列');
       return res.status(200).end();
     } catch (e) {
+      console.error('[打印] 失败:', e?.message);
       return res.status(500).json({ error: e?.message || String(e) });
     }
   }

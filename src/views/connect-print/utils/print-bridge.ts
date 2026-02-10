@@ -7,7 +7,8 @@
 export const BRIDGE_SOURCE_PAGE = 'connect-print-page'
 export const BRIDGE_SOURCE_EXTENSION = 'connect-print-extension'
 
-const DEFAULT_TIMEOUT_MS = 15000
+const DEFAULT_TIMEOUT_MS = 30000
+const BATCH_TIMEOUT_MS = 300000
 
 export interface PrinterItem {
   id: string
@@ -59,9 +60,9 @@ function sendRequest<T>(
   })
 }
 
-/** 检测扩展是否注入并响应（PING） */
+/** 检测扩展是否注入并响应（PING），超时 5 秒 */
 export function isExtensionAvailable(): Promise<boolean> {
-  return sendRequest<boolean>('PING', undefined, 3000).then(
+  return sendRequest<boolean>('PING', undefined, 5000).then(
     () => true,
     () => false
   )
@@ -78,15 +79,15 @@ export function addConnection(payload: AddConnectionPayload): Promise<PrinterIte
 }
 
 /** 发送单条 ZPL 到指定打印机；系统打印机（id 以 win_ 开头）时需传 printerName */
-export function printZPL(printerId: string, zpl: string, printerName?: string): Promise<void> {
+export function printZPL(printerId: string, zpl: string, printerName?: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<void> {
   const payload: { printerId: string; zpl: string; printerName?: string } = { printerId, zpl }
   if (printerName) payload.printerName = printerName
-  return sendRequest<void>('PRINT_ZPL', payload)
+  return sendRequest<void>('PRINT_ZPL', payload, timeoutMs)
 }
 
-/** 批量发送多条 ZPL；系统打印机时需传 printerName */
-export function printZPLBatch(printerId: string, zplList: string[], printerName?: string): Promise<void> {
+/** 批量发送多条 ZPL；系统打印机时需传 printerName。批量耗时长，使用更长超时。 */
+export function printZPLBatch(printerId: string, zplList: string[], printerName?: string, timeoutMs = BATCH_TIMEOUT_MS): Promise<void> {
   const payload: { printerId: string; zplList: string[]; printerName?: string } = { printerId, zplList }
   if (printerName) payload.printerName = printerName
-  return sendRequest<void>('PRINT_ZPL_BATCH', payload)
+  return sendRequest<void>('PRINT_ZPL_BATCH', payload, timeoutMs)
 }

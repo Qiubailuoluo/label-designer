@@ -441,6 +441,28 @@
   color: #f59e0b;
 }
 
+.left-printer-sidebar .empty-printers.extension-hint .refresh-hint {
+  margin-top: 8px;
+  color: #0ea5e9;
+}
+
+.left-printer-sidebar .empty-printers.extension-hint .retry-ext-btn {
+  margin-top: 10px;
+}
+
+.left-printer-sidebar .empty-printers .hint code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.left-printer-sidebar .empty-printers .hint .err-msg {
+  display: block;
+  color: #dc2626;
+  margin-bottom: 4px;
+}
+
 /* 列绑定区块 */
 .binding-section {
   margin-top: 20px;

@@ -17,11 +17,18 @@
           <span class="empty-icon">🔌</span>
           <p>未检测到打印扩展</p>
           <p class="hint">云部署需安装「连接打印扩展」并运行本地打印服务，详见文档</p>
+          <p class="hint refresh-hint">若已安装扩展，请<strong>刷新本页（F5）</strong>或点击下方重试</p>
+          <button type="button" class="btn-secondary retry-ext-btn" @click="retryExtension">重试检测扩展</button>
         </div>
         <div v-else-if="localPrinters.length === 0" class="empty-printers">
           <span class="empty-icon">🖨️</span>
-          <p>暂无打印机</p>
-          <p class="hint">点击「应用连接」添加 TCP/USB，或点击「刷新打印机列表」</p>
+          <p v-if="printersFetchFailed">获取打印机列表失败</p>
+          <p v-else>暂无打印机</p>
+          <p class="hint" v-if="printersFetchFailed">
+            <span v-if="printersFetchError" class="err-msg">错误：{{ printersFetchError }}</span>
+            请确认<strong>本地打印服务</strong>已启动（在 <code>print-extension/local-print-service</code> 下运行 <code>node server.js</code>），并确认扩展有权访问 127.0.0.1，然后点击「刷新打印机列表」
+          </p>
+          <p class="hint" v-else>系统打印机与「应用连接」的打印机会显示在此；点击「刷新打印机列表」或「应用连接」添加 TCP/USB</p>
         </div>
         <div
           v-for="p in filteredPrinters"
@@ -307,6 +314,7 @@ import {
   batchZPLFromRows,
 } from './utils/zpl-generator'
 import {
+  isExtensionAvailable,
   getPrinters,
   addConnection,
   printZPL,
@@ -348,6 +356,10 @@ const config = reactive({
 const printerSearch = ref('')
 const localPrinters = ref<PrinterItem[]>([])
 const selectedPrinter = ref<PrinterItem | null>(null)
+/** 上次获取打印机列表是否失败（如本地服务未启动） */
+const printersFetchFailed = ref(false)
+/** 上次获取失败时的错误信息 */
+const printersFetchError = ref('')
 
 const templateList = ref<TemplateListItem[]>([])
 const selectedTemplateId = ref('')
@@ -467,17 +479,32 @@ async function applyConnection() {
   }
 }
 
-/** @param silent 为 true 时不弹窗（用于进入页面时自动拉取），仅更新列表与扩展状态 */
+/** 仅用 PING 检测扩展是否注入，不依赖本地服务 */
+async function checkExtension() {
+  const ok = await isExtensionAvailable()
+  extensionAvailable.value = ok
+  return ok
+}
+
+/** 未检测到扩展时点击「重试」：再次 PING 并拉取打印机列表 */
+async function retryExtension() {
+  const ok = await checkExtension()
+  if (ok) await refreshPrinters(true)
+}
+
+/** @param silent 为 true 时不弹窗；不根据 getPrinters 结果修改 extensionAvailable（扩展状态由 PING 决定） */
 async function refreshPrinters(silent = false) {
+  printersFetchFailed.value = false
+  printersFetchError.value = ''
   try {
     const list = await getPrinters()
     localPrinters.value = Array.isArray(list) ? (list as PrinterItem[]) : []
-    extensionAvailable.value = true
   } catch (e) {
     console.error(e)
     localPrinters.value = []
-    extensionAvailable.value = false
-    if (!silent) alert('刷新打印机列表失败：' + (e instanceof Error ? e.message : String(e)))
+    printersFetchFailed.value = true
+    printersFetchError.value = e instanceof Error ? e.message : String(e)
+    if (!silent) alert('刷新打印机列表失败：' + printersFetchError.value)
   }
 }
 
@@ -623,8 +650,9 @@ function loadConnectPrintCache(): ConnectPrintCache | null {
 }
 
 async function initPage() {
-  // 进入页面时直接尝试拉取打印机列表，成功即视为扩展可用，避免 PING 超时导致不自动拉取
-  await refreshPrinters(true)
+  // 先用 PING 检测扩展是否注入（短超时），再拉打印机列表，避免“未检测到扩展”与“本地服务未启动”混淆
+  const hasExtension = await checkExtension()
+  if (hasExtension) await refreshPrinters(true)
   await loadTemplateList()
   const cached = loadConnectPrintCache()
   if (!cached) return
