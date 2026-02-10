@@ -44,6 +44,29 @@ function getWindowsPrinterList() {
   }
 }
 
+/** Windows 下根据打印机名查端口名，失败返回 null */
+function getWindowsPrinterPort(printerName) {
+  if (process.platform !== 'win32') return null;
+  try {
+    const escaped = printerName.replace(/'/g, "''");
+    const cmd = `powershell -NoProfile -Command "(Get-Printer -Name '${escaped}' -ErrorAction Stop).PortName"`;
+    const out = execSync(cmd, { encoding: 'utf8', windowsHide: true, timeout: 5000 });
+    return (out && out.trim()) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** 从 Windows 端口名解析出 IP（如 IP_192.168.1.100 或 192.168.1.100） */
+function parsePortToIP(portName) {
+  if (!portName || typeof portName !== 'string') return null;
+  const s = portName.trim();
+  const ipMatch = s.match(/^IP_(.+)$/) || (s.match(/^\d+\.\d+\.\d+\.\d+$/) ? [null, s] : null);
+  if (!ipMatch) return null;
+  const ip = ipMatch[1] || ipMatch[0];
+  return /^\d+\.\d+\.\d+\.\d+$/.test(ip) ? ip : null;
+}
+
 function sendZPLToTCP(host, port, zpl, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const sock = new net.Socket();
@@ -107,22 +130,50 @@ app.post('/connection', (req, res) => {
   res.json({ id, name, address });
 });
 
-/** Windows 系统打印机（含 USB）：PowerShell + .NET 发送原始 ZPL，不依赖 node 原生模块 */
-function sendZPLToWindowsPrinter(printerName, zpl) {
+/** Windows 系统打印机：优先端口直连（网络 TCP / USB 直写），失败再走驱动队列 */
+async function sendZPLToWindowsPrinter(printerName, zpl) {
   if (process.platform !== 'win32') {
-    return Promise.reject(new Error('仅 Windows 支持系统打印机原始打印'));
+    throw new Error('仅 Windows 支持系统打印机原始打印');
   }
-  const scriptPath = path.join(__dirname, 'send-raw-print.ps1');
   const tmpPath = path.join(os.tmpdir(), `zpl-${Date.now()}-${Math.random().toString(36).slice(2)}.zpl`);
   try {
     fs.writeFileSync(tmpPath, zpl, 'utf8');
+    const portName = getWindowsPrinterPort(printerName);
+
+    // 1) 端口为 IP 时直连 9100 发 ZPL，避免驱动假成功、队列无任务
+    const ip = parsePortToIP(portName);
+    if (ip) {
+      try {
+        await sendZPLToTCP(ip, 9100, zpl, 10000);
+        console.log('[打印] 已通过 TCP %s:9100 直发', ip);
+        return;
+      } catch (tcpErr) {
+        console.warn('[打印] TCP 直连失败，回退驱动:', tcpErr?.message || tcpErr);
+      }
+    }
+
+    // 2) USB/COM/LPT 尝试直写端口（部分环境可绕过驱动）
+    if (portName && /^(USB\d+|COM\d+|LPT\d+)$/i.test(portName.trim())) {
+      const portScriptPath = path.join(__dirname, 'send-raw-to-port.ps1');
+      try {
+        execSync('powershell', [
+          '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', portScriptPath,
+          '-PortName', portName.trim(), '-FilePath', tmpPath,
+        ], { encoding: 'utf8', timeout: 15000, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+        console.log('[打印] 已通过端口 %s 直写', portName);
+        return;
+      } catch (portErr) {
+        console.warn('[打印] 端口直写失败，回退驱动:', portErr?.message || portErr);
+      }
+    }
+
+    // 3) 走驱动队列（OpenPrinter + WritePrinter）；若队列仍无任务，可改用 TCP「应用连接」该打印机
+    const scriptPath = path.join(__dirname, 'send-raw-print.ps1');
     execSync('powershell', [
-      '-NoProfile',
-      '-ExecutionPolicy', 'Bypass',
-      '-File', scriptPath,
-      '-PrinterName', printerName,
-      '-FilePath', tmpPath,
+      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath,
+      '-PrinterName', printerName, '-FilePath', tmpPath,
     ], { encoding: 'utf8', timeout: 30000, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    console.log('[打印] 已通过驱动队列提交（端口: %s）', portName || '未知');
   } catch (e) {
     const stderr = (e.stderr && String(e.stderr).trim()) || '';
     const msg = stderr || e?.message || '打印失败';
