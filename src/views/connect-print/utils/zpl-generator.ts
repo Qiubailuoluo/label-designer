@@ -4,6 +4,10 @@
  * - EPC/TID/User Data：由打印机从 RFID 标签读取，生成 ^RFR + ^FN 指令。
  * - 其他变量（变量1、条码等）：输出占位符 {{变量名}}，批量打印时用 Excel 替换。
  * 图片支持生成 ^GF 图形指令（需异步预生成 imageZPLCache）。
+ *
+ * 官方参考：https://docs.zebra.com/us/en/printers/software/zpl-pg/c-zpl-zpl-commands.html
+ * 当前使用：^A(字体), ^BC(Code128), ^B3(Code39), ^BQ(QR), ^BY(条码宽高)。
+ * 若真机测试与预期不符，请根据 docs/zpl-command-reference.md 反馈正确格式以便修改。
  */
 import type { DesignElement, CanvasConfig } from '@/views/label-designer/types'
 import type { TextElement, RectElement, LineElement, EllipseElement, BarcodeElement, VariableElement, ImageElement } from '@/views/label-designer/types'
@@ -29,16 +33,26 @@ const RFID_ZPL_MAP: Record<string, { rfr: string; fn: number }> = {
   'User Data': { rfr: 'U', fn: 3 },
 }
 
-/** 设计器字体名 -> ZPL ^A 字体代号（0=默认, D=SimSun/宋体, E=Swiss Unicode） */
+/**
+ * 设计器字体名 -> ZPL 文本字体指令（对齐官方示例）
+ * - ZEBRA 0: ^A0N,h,w（内置默认字体）
+ * - ZEBRA SimSun: ^A@N,h,w,SIMSUN.TTF（按字体文件名调用）
+ * - ZEBRA Swiss Unicode: ^A@N,h,w,TT0003M_（Zebra Unicode 字体）
+ * 参考：^FT + ^A0N / ^A@N,h,w,字体名 + ^FH\\^CI28 ^FD...^FS^CI27
+ */
 export const ZPL_FONT_MAP: Record<string, string> = {
   'ZEBRA 0': '0',
   'ZEBRA SimSun': 'D',
   'ZEBRA Swiss Unicode': 'E',
 }
 
-function getZPLFontCode(fontFamily: string | undefined): string {
-  if (!fontFamily) return '0'
-  return ZPL_FONT_MAP[fontFamily] ?? '0'
+/** 返回 ZPL 字体指令：^A0N,h,w 或 ^A@N,h,w,字体文件名 */
+function getZPLFontCommand(fontFamily: string | undefined, fontHeight: number, fontWidth: number): string {
+  const code = !fontFamily ? '0' : ZPL_FONT_MAP[fontFamily] ?? '0'
+  if (code === '0') return `^A0N,${fontHeight},${fontWidth}`
+  if (code === 'D') return `^A@N,${fontHeight},${fontWidth},SIMSUN.TTF`
+  if (code === 'E') return `^A@N,${fontHeight},${fontWidth},TT0003M_`
+  return `^A0N,${fontHeight},${fontWidth}`
 }
 
 export function mmToDots(mm: number, dpi: number): number {
@@ -147,16 +161,18 @@ export function templateToZPL(
         const fontSize = t.fontSize ?? 12
         const fontHeight = Math.max(10, Math.round((fontSize / 72) * dpi))
         const fontWidth = Math.round(fontHeight * 0.6)
-        const fontCode = getZPLFontCode(t.fontFamily)
-        const aCmd = `^A${fontCode}N,${fontHeight},${fontWidth}`
+        const aCmd = getZPLFontCommand(t.fontFamily, fontHeight, fontWidth)
+        const rotCmd = rot === 'N' ? '' : `^RO${rot}`
+        const fdPrefix = '^FH\\^CI28'
+        const fdSuffix = '^FS^CI27'
         if (t.dataField && isRfidField(t.dataField)) {
           const fn = RFID_ZPL_MAP[t.dataField]?.fn ?? 1
-          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FN${fn}^FS`)
+          parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FN${fn}${fdSuffix}`)
         } else if (t.dataField && usePlaceholder) {
-          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FD${VARIABLE_PLACEHOLDER_PREFIX}${t.dataField}${VARIABLE_PLACEHOLDER_SUFFIX}^FS`)
+          parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FD${VARIABLE_PLACEHOLDER_PREFIX}${t.dataField}${VARIABLE_PLACEHOLDER_SUFFIX}${fdSuffix}`)
         } else {
           const content = (t.content ?? '').trim() || ' '
-          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FD${escapeFieldData(content)}^FS`)
+          parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FD${escapeFieldData(content)}${fdSuffix}`)
         }
         break
       }
@@ -166,15 +182,17 @@ export function templateToZPL(
         const fontSize = 12
         const fontHeight = Math.max(10, Math.round((fontSize / 72) * dpi))
         const fontWidth = Math.round(fontHeight * 0.6)
-        const fontCode = getZPLFontCode((v as unknown as { fontFamily?: string }).fontFamily)
-        const aCmd = `^A${fontCode}N,${fontHeight},${fontWidth}`
+        const aCmd = getZPLFontCommand((v as unknown as { fontFamily?: string }).fontFamily, fontHeight, fontWidth)
+        const rotCmd = rot === 'N' ? '' : `^RO${rot}`
+        const fdPrefix = '^FH\\^CI28'
+        const fdSuffix = '^FS^CI27'
         if (isRfidField(field)) {
           const fn = RFID_ZPL_MAP[field]?.fn ?? 2
-          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FN${fn}^FS`)
+          parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FN${fn}${fdSuffix}`)
         } else if (usePlaceholder) {
-          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FD${VARIABLE_PLACEHOLDER_PREFIX}${field}${VARIABLE_PLACEHOLDER_SUFFIX}^FS`)
+          parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FD${VARIABLE_PLACEHOLDER_PREFIX}${field}${VARIABLE_PLACEHOLDER_SUFFIX}${fdSuffix}`)
         } else {
-          parts.push(`^FO${x},${y}^RO${rot}${aCmd}^FD${escapeFieldData(v.sampleValue ?? '')}^FS`)
+          parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FD${escapeFieldData(v.sampleValue ?? '')}${fdSuffix}`)
         }
         break
       }
@@ -196,8 +214,8 @@ export function templateToZPL(
           const barHeight = Math.max(20, hEl)
           if (b.dataField && isRfidField(b.dataField)) {
             const fn = RFID_ZPL_MAP[b.dataField]?.fn ?? 1
-            const bc = format === 'CODE39' || format === 'CODE39' ? 'B3N' : 'BCN'
-            parts.push(`^FO${x},${y}^RO${rot}^BY2,2,${barHeight}^${bc}^FD^FN${fn}^FS`)
+            const bcParams = format === 'CODE39' ? `B3N,N,${barHeight},Y,N` : `BCN,${barHeight},Y,N,N,A`
+            parts.push(`^FO${x},${y}^RO${rot}^BY2,2^${bcParams}^FD^FN${fn}^FS`)
           } else {
             const barKey = b.dataField || (barcodeIndex === 0 ? BARCODE_PLACEHOLDER_BASE : `${BARCODE_PLACEHOLDER_BASE}_${barcodeIndex}`)
             if (!b.dataField) barcodeIndex++
@@ -205,8 +223,8 @@ export function templateToZPL(
               ? `${VARIABLE_PLACEHOLDER_PREFIX}${barKey}${VARIABLE_PLACEHOLDER_SUFFIX}`
               : (b.content ?? '').trim() || '0'
             const escaped = usePlaceholder ? data : escapeFieldData(data)
-            const bc = format === 'CODE39' ? 'B3N' : 'BCN'
-            parts.push(`^FO${x},${y}^RO${rot}^BY2,2,${barHeight}^${bc}^FD${escaped}^FS`)
+            const bcParams = format === 'CODE39' ? `B3N,N,${barHeight},Y,N` : `BCN,${barHeight},Y,N,N,A`
+            parts.push(`^FO${x},${y}^RO${rot}^BY2,2^${bcParams}^FD${escaped}^FS`)
           }
         }
         break

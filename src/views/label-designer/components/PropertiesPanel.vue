@@ -25,7 +25,7 @@
             <input type="number" step="0.01" :value="round2(element.y)" @input="emitUpdate('y', round2(numberVal($event)))" class="prop-input" />
           </div>
         </div>
-        <div class="prop-row">
+        <div class="prop-row" v-if="element.type !== 'barcode' || !isBarcodeQR">
           <div class="prop-group">
             <label>宽 (mm)</label>
             <input type="number" step="0.01" :value="round2(element.width)" @input="emitUpdate('width', round2(numberVal($event)))" class="prop-input" />
@@ -34,6 +34,11 @@
             <label>高 (mm)</label>
             <input type="number" step="0.01" :value="round2(element.height)" @input="emitUpdate('height', round2(numberVal($event)))" class="prop-input" />
           </div>
+        </div>
+        <div class="prop-group" v-else>
+          <label>尺寸 (mm)</label>
+          <input type="number" step="0.01" :value="round2(element.width)" @input="emitQRSize(round2(numberVal($event)))" class="prop-input" />
+          <p class="prop-hint">QR 码为正方形，宽高一致</p>
         </div>
         <div class="prop-group">
           <label>旋转 (°)</label>
@@ -140,7 +145,7 @@
           </div>
           <div class="prop-group">
             <label>格式</label>
-            <select :value="(element as any).format" @change="emitUpdate('format', ($event.target as HTMLSelectElement).value)" class="prop-select">
+            <select :value="(element as any).format" @change="onBarcodeFormatChange(($event.target as HTMLSelectElement).value)" class="prop-select">
               <option v-for="opt in barcodeFormatOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
             <p class="prop-hint">QR 在设计器中显示为二维码；ZPL 输出 ^BQ（QR）或 ^BC（Code 128）</p>
@@ -215,6 +220,13 @@ const bindVariableOptionsRequired = computed(() => {
   ]
 })
 
+/** 当前条码是否为 QR（QR 码强制正方形） */
+const isBarcodeQR = computed(() => {
+  if (!props.element || props.element.type !== 'barcode') return false
+  const f = ((props.element as any).format ?? '').toUpperCase().replace(/\s/g, '')
+  return f === 'QR' || f === 'QRCODE'
+})
+
 function getCurrentDataField(): string {
   if (!props.element) return ''
   const el = props.element as { dataField?: string }
@@ -240,6 +252,25 @@ function round2(n: number | undefined): number {
 function emitUpdate(key: string, value: unknown) {
   if (!props.element) return
   emit('update', props.element.id, { [key]: value } as Partial<DesignElement>)
+}
+
+/** QR 码尺寸：宽高同时更新为同一值 */
+function emitQRSize(sizeMm: number) {
+  if (!props.element) return
+  emit('update', props.element.id, { width: sizeMm, height: sizeMm } as Partial<DesignElement>)
+}
+
+/** 条码格式变更：若改为 QR 则强制宽高一致为正方形 */
+function onBarcodeFormatChange(format: string) {
+  if (!props.element) return
+  const f = format.toUpperCase().replace(/\s/g, '')
+  const isQR = f === 'QR' || f === 'QRCODE'
+  if (isQR) {
+    const side = Math.max(props.element.width ?? 0, props.element.height ?? 0)
+    emit('update', props.element.id, { format, width: side, height: side } as Partial<DesignElement>)
+  } else {
+    emitUpdate('format', format)
+  }
 }
 
 function emitDelete() {

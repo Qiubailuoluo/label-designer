@@ -4,7 +4,7 @@
  */
 import * as fabric from 'fabric'
 import type { DesignElement } from '../types'
-import type { TextElement, RectElement, LineElement, EllipseElement } from '../types'
+import type { TextElement, RectElement, LineElement, EllipseElement, BarcodeElement } from '../types'
 
 const DPI = 300
 
@@ -74,11 +74,13 @@ export async function loadBarcodeObject(
   const formatNorm = (format || 'CODE128').toUpperCase().replace(/\s/g, '')
   const isQR = formatNorm === 'QR' || formatNorm === 'QRCODE'
   let dataUrl: string
+  const sizeQR = isQR ? Math.min(w, h) : 0
   if (isQR) {
     const qrcode = await import('qrcode')
     const toDataURL = (qrcode as { toDataURL: (t: string, opts?: { width?: number; margin?: number }) => Promise<string> }).toDataURL
+    const qrPx = Math.max(100, Math.min(800, Math.round(sizeQR * 2)))
     dataUrl = await toDataURL((content || '0').trim() || '0', {
-      width: Math.max(100, Math.min(800, Math.round(Math.min(w, h) * 2))),
+      width: qrPx,
       margin: 1,
     })
   } else {
@@ -97,8 +99,11 @@ export async function loadBarcodeObject(
   const img = await FabricImage.fromURL(dataUrl, { crossOrigin: 'anonymous' })
   const iw = (img as any).width ?? 1
   const ih = (img as any).height ?? 1
-  const scaleX = w / iw
-  const scaleY = h / ih
+  let scaleX = w / iw
+  let scaleY = h / ih
+  if (isQR && sizeQR > 0) {
+    scaleX = scaleY = sizeQR / Math.max(iw, ih)
+  }
   img.set({
     left: x,
     top: y,
@@ -108,6 +113,7 @@ export async function loadBarcodeObject(
     ...defaultOpts,
   })
   setElementMeta(img, elementId, 'barcode')
+  img.set('barcodeFormat', formatNorm)
   return img
 }
 
@@ -264,11 +270,17 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
     }
 
     case 'barcode': {
+      const barcodeEl = element as BarcodeElement
+      const formatNorm = (barcodeEl.format ?? 'CODE128').toUpperCase().replace(/\s/g, '')
+      const isQR = formatNorm === 'QR' || formatNorm === 'QRCODE'
+      const side = isQR ? Math.min(w, h) : 0
+      const placeW = isQR ? side : w
+      const placeH = isQR ? side : h
       const placeholder = new fabric.Rect({
         left: x,
         top: y,
-        width: w,
-        height: h,
+        width: placeW,
+        height: placeH,
         angle,
         fill: '#f5f5f5',
         stroke: '#ccc',
@@ -277,6 +289,7 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
         ...defaultOpts,
       })
       setElementMeta(placeholder, element.id, 'barcode')
+      placeholder.set('barcodeFormat', formatNorm)
       return placeholder
     }
 
@@ -359,6 +372,13 @@ export function getUpdatesFromFabricObject(obj: fabric.Object, dpi: number, geom
   } else {
     actualW = (typeof objAny.getScaledWidth === 'function' ? objAny.getScaledWidth() : actualW)
     actualH = (typeof objAny.getScaledHeight === 'function' ? objAny.getScaledHeight() : actualH)
+  }
+  if (type === 'barcode') {
+    const fmt = (obj.get('barcodeFormat') ?? '') as string
+    if (fmt === 'QR' || fmt === 'QRCODE') {
+      const side = Math.max(actualW, actualH)
+      actualW = actualH = side
+    }
   }
   const updates: Partial<DesignElement> = {
     id,

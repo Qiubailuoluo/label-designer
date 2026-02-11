@@ -176,7 +176,15 @@ function onCanvasClick(xMm: number, yMm: number) {
 
 function onElementUpdate(id: string, updates: Partial<DesignElement>) {
   const el = elements.value.find((e) => e.id === id)
-  if (el) Object.assign(el, updates)
+  if (!el) return
+  Object.assign(el, updates)
+  if (el.type === 'barcode') {
+    const f = ((el as any).format ?? '').toUpperCase().replace(/\s/g, '')
+    if (f === 'QR' || f === 'QRCODE') {
+      const side = Math.max(el.width ?? 0, el.height ?? 0)
+      el.width = el.height = side
+    }
+  }
 }
 
 function onPropertyUpdate(id: string, updates: Partial<DesignElement>) {
