@@ -1,8 +1,13 @@
 <template>
   <div class="left-panel">
-    <section class="panel-section layer-section">
-      <h3 class="section-title">图层</h3>
-      <div class="layer-list">
+    <div class="left-panel-scroll">
+      <section class="panel-section layer-section">
+        <h3 class="section-title collapsible" @click="toggleSection('layers')">
+          <span class="section-chevron">{{ sectionOpen.layers ? '▼' : '▶' }}</span>
+          图层
+        </h3>
+        <div v-show="sectionOpen.layers" class="section-body">
+          <div class="layer-list">
         <div
           v-for="(el, index) in layersByZIndex"
           :key="el.id"
@@ -49,12 +54,17 @@
           </div>
         </div>
         <p v-if="!elements.length" class="layer-empty">暂无元素，从下方添加</p>
-      </div>
-    </section>
+          </div>
+        </div>
+      </section>
 
-    <section class="panel-section">
-      <h3 class="section-title">基本元素</h3>
-      <div class="tool-grid">
+      <section class="panel-section">
+        <h3 class="section-title collapsible" @click="toggleSection('elements')">
+          <span class="section-chevron">{{ sectionOpen.elements ? '▼' : '▶' }}</span>
+          元素
+        </h3>
+        <div v-show="sectionOpen.elements" class="section-body">
+          <div class="tool-grid">
         <button
           v-for="t in layoutTools"
           :key="t.type"
@@ -65,12 +75,17 @@
           <span class="tool-icon">{{ t.icon }}</span>
           <span class="tool-name">{{ t.name }}</span>
         </button>
-      </div>
-    </section>
+          </div>
+        </div>
+      </section>
 
-    <section class="panel-section">
-      <h3 class="section-title">RFID 标签</h3>
-      <div class="variable-list">
+      <section class="panel-section">
+        <h3 class="section-title collapsible" @click="toggleSection('rfid')">
+          <span class="section-chevron">{{ sectionOpen.rfid ? '▼' : '▶' }}</span>
+          RFID 标签
+        </h3>
+        <div v-show="sectionOpen.rfid" class="section-body">
+          <div class="variable-list">
         <button
           v-for="v in rfidVariables"
           :key="v.dataField"
@@ -80,13 +95,18 @@
           <span class="variable-icon">📌</span>
           {{ v.label }}
         </button>
-      </div>
-    </section>
+          </div>
+        </div>
+      </section>
 
-    <section class="panel-section">
-      <h3 class="section-title">变量</h3>
-      <p class="section-hint">用户创建的变量，用于绑定 Excel 列</p>
-      <div class="variable-list">
+      <section class="panel-section">
+        <h3 class="section-title collapsible" @click="toggleSection('variables')">
+          <span class="section-chevron">{{ sectionOpen.variables ? '▼' : '▶' }}</span>
+          变量
+        </h3>
+        <div v-show="sectionOpen.variables" class="section-body">
+          <p class="section-hint">用户创建的变量，点击变量名后在画布上点击放置</p>
+          <div class="variable-list">
         <button
           v-for="name in customVariableNames"
           :key="name"
@@ -99,14 +119,26 @@
         <button type="button" class="add-variable-btn" @click="onAddCustomVariableClick">
           + 添加变量
         </button>
-      </div>
-    </section>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { DesignElement, ElementType } from '../types'
+
+const sectionOpen = ref<Record<string, boolean>>({
+  layers: true,
+  elements: true,
+  rfid: true,
+  variables: true,
+})
+function toggleSection(key: string) {
+  sectionOpen.value[key] = !sectionOpen.value[key]
+}
 
 const draggedId = ref<string | null>(null)
 const draggedIndex = ref<number>(0)

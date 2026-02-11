@@ -40,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LabelDesignerToolbar from './components/Toolbar.vue'
 import LabelDesignerLeftPanel from './components/LeftPanel.vue'
@@ -66,6 +66,14 @@ const customVariableNames = ref<string[]>([])
 const selectedId = ref<string | null>(null)
 const pendingAdd = ref<Omit<DesignElement, 'id'> | null>(null)
 const pendingAddName = computed(() => pendingAdd.value?.name ?? '')
+
+/** 撤销栈：每次删除/粘贴/放置新元素前压入当前 elements 快照，最多保留 50 步 */
+const undoHistory = ref<DesignElement[][]>([])
+const PASTE_OFFSET_MM = 10
+const MAX_UNDO = 50
+
+/** 复制用：当前选中的元素完整数据（粘贴时克隆并偏移） */
+const clipboard = ref<DesignElement | null>(null)
 
 const selectedElement = computed(() => {
   const id = selectedId.value
@@ -136,11 +144,24 @@ function normalizeElement(partial: Omit<DesignElement, 'id'>, existingElements: 
   return merged
 }
 
+function pushHistory() {
+  const snapshot = JSON.parse(JSON.stringify(elements.value)) as DesignElement[]
+  undoHistory.value.push(snapshot)
+  if (undoHistory.value.length > MAX_UNDO) undoHistory.value.shift()
+}
+
+function undo() {
+  if (undoHistory.value.length === 0) return
+  const prev = undoHistory.value.pop()!
+  elements.value = prev
+  selectedId.value = null
+}
+
 function onAddElement(partial: Omit<DesignElement, 'id'>) {
   pendingAdd.value = partial
 }
 
-/** 添加用户变量：若传入名称则使用（可自定义），否则生成 变量1、变量2…，加入列表并添加对应 variable 元素 */
+/** 添加用户变量：仅加入变量列表，不自动在画布创建元素；用户点击左侧变量名后再在画布上点击放置 */
 function onAddCustomVariable(customName?: string) {
   const used = new Set(customVariableNames.value)
   let n = 1
@@ -149,24 +170,11 @@ function onAddCustomVariable(customName?: string) {
   if (!customVariableNames.value.includes(name)) {
     customVariableNames.value = [...customVariableNames.value, name]
   }
-  pendingAdd.value = {
-    type: 'variable',
-    name,
-    x: 15,
-    y: 15,
-    width: 80,
-    height: 18,
-    rotation: 0,
-    zIndex: 1,
-    visible: true,
-    dataField: name,
-    label: name + ':',
-    sampleValue: '',
-  } as Omit<DesignElement, 'id'>
 }
 
 function onCanvasClick(xMm: number, yMm: number) {
   if (!pendingAdd.value) return
+  pushHistory()
   const partial = { ...pendingAdd.value, x: xMm, y: yMm }
   pendingAdd.value = null
   const el = normalizeElement(partial, elements.value)
@@ -192,8 +200,57 @@ function onPropertyUpdate(id: string, updates: Partial<DesignElement>) {
 }
 
 function onElementDelete(id: string) {
+  pushHistory()
   elements.value = elements.value.filter((e) => e.id !== id)
   if (selectedId.value === id) selectedId.value = null
+}
+
+function copySelected() {
+  const el = selectedElement.value
+  if (el) clipboard.value = JSON.parse(JSON.stringify(el)) as DesignElement
+}
+
+function pasteFromClipboard() {
+  const src = clipboard.value
+  if (!src) return
+  pushHistory()
+  const { id: _id, ...partial } = src
+  const offset = { x: (partial.x ?? 15) + PASTE_OFFSET_MM, y: (partial.y ?? 15) + PASTE_OFFSET_MM }
+  const el = normalizeElement({ ...partial, ...offset } as Omit<DesignElement, 'id'>, elements.value)
+  elements.value.push(el)
+  selectedId.value = el.id
+}
+
+function deleteSelected() {
+  if (!selectedId.value) return
+  onElementDelete(selectedId.value)
+}
+
+function onDesignerKeydown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable) return
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault()
+    deleteSelected()
+    return
+  }
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === 'z') {
+      e.preventDefault()
+      undo()
+      return
+    }
+    if (e.key === 'c') {
+      e.preventDefault()
+      copySelected()
+      return
+    }
+    if (e.key === 'v') {
+      e.preventDefault()
+      pasteFromClipboard()
+      return
+    }
+  }
 }
 
 function onConfigUpdate(patch: Partial<CanvasConfig>) {
@@ -244,7 +301,13 @@ async function loadInitial() {
   }
 }
 
-onMounted(() => loadInitial())
+onMounted(() => {
+  loadInitial()
+  window.addEventListener('keydown', onDesignerKeydown)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', onDesignerKeydown)
+})
 watch(templateId, () => loadInitial())
 </script>
 
