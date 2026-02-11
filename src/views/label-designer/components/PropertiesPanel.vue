@@ -13,7 +13,7 @@
       <div class="props-body">
         <div class="prop-group">
           <label>名称</label>
-          <input :value="element.name" @input="emitUpdate('name', ($event.target as HTMLInputElement).value)" class="prop-input" />
+          <input :value="element.name" @input="emitUpdate('name', ($event.target as HTMLInputElement).value)" class="prop-input" placeholder="用于图层面板与连接打印变量显示" />
         </div>
         <div class="prop-row">
           <div class="prop-group">
@@ -117,8 +117,8 @@
         <template v-if="element.type === 'variable'">
           <div class="prop-group">
             <label>绑定变量</label>
-            <select :value="(element as any).dataField" @change="emitUpdate('dataField', ($event.target as HTMLSelectElement).value)" class="prop-select">
-              <option v-for="opt in bindVariableOptionsRequired" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            <select :value="(element as any).dataField ?? ''" @change="emitUpdate('dataField', ($event.target as HTMLSelectElement).value || undefined)" class="prop-select">
+              <option v-for="opt in bindVariableOptionsWithEmpty" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
           <div class="prop-group">
@@ -219,6 +219,12 @@ const bindVariableOptionsRequired = computed(() => {
     ...BINDABLE_VARIABLE_OPTIONS.map((n) => ({ value: n, label: n })),
   ]
 })
+
+/** 变量元素用：含“未绑定”选项（删除变量后解除绑定时显示） */
+const bindVariableOptionsWithEmpty = computed(() => [
+  { value: '', label: '（未绑定）' },
+  ...bindVariableOptionsRequired.value,
+])
 
 /** 当前条码是否为 QR（QR 码强制正方形） */
 const isBarcodeQR = computed(() => {

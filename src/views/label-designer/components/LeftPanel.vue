@@ -107,15 +107,28 @@
         <div v-show="sectionOpen.variables" class="section-body">
           <p class="section-hint">用户创建的变量，点击变量名后在画布上点击放置</p>
           <div class="variable-list">
-        <button
+        <div
           v-for="name in customVariableNames"
           :key="name"
-          class="variable-btn"
-          @click="addCustomVariableElement(name)"
+          class="variable-row"
         >
-          <span class="variable-icon">📌</span>
-          {{ name }}
-        </button>
+          <button
+            type="button"
+            class="variable-btn"
+            @click="addCustomVariableElement(name)"
+          >
+            <span class="variable-icon">📌</span>
+            <span class="variable-name">{{ name }}</span>
+          </button>
+          <div class="variable-actions" @click.stop>
+            <button type="button" class="var-action-btn var-action-rename" title="重命名变量" @click="onRenameVariable(name)" aria-label="重命名">
+              <span class="var-action-icon">✎</span>
+            </button>
+            <button type="button" class="var-action-btn var-action-delete" title="删除变量并解除绑定" @click="onDeleteVariable(name)" aria-label="删除">
+              <span class="var-action-icon">🗑</span>
+            </button>
+          </div>
+        </div>
         <button type="button" class="add-variable-btn" @click="onAddCustomVariableClick">
           + 添加变量
         </button>
@@ -153,6 +166,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'add-element': [element: Omit<DesignElement, 'id'>]
   'add-custom-variable': [name?: string]
+  'rename-variable': [oldName: string, newName: string]
+  'delete-variable': [name: string]
   'select': [id: string | null]
   'element-update': [payload: { id: string; updates: Partial<DesignElement> }]
 }>()
@@ -309,6 +324,23 @@ function onAddCustomVariableClick() {
   const input = window.prompt('输入变量名称（留空则使用默认 ' + defaultName + '）：', defaultName)
   const name = (input != null && input.trim() !== '') ? input.trim() : defaultName
   emit('add-custom-variable', name)
+}
+
+function onRenameVariable(oldName: string) {
+  const input = window.prompt('新的变量名称：', oldName)
+  if (input == null || input.trim() === '') return
+  const newName = input.trim()
+  if (newName === oldName) return
+  if (props.customVariableNames.includes(newName)) {
+    alert('已存在同名变量，请使用其他名称')
+    return
+  }
+  emit('rename-variable', oldName, newName)
+}
+
+function onDeleteVariable(name: string) {
+  if (!confirm(`确定删除变量「${name}」？绑定了该变量的元素将解除绑定。`)) return
+  emit('delete-variable', name)
 }
 </script>
 

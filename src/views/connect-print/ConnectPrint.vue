@@ -119,7 +119,7 @@
           </button>
         </div>
         <p v-if="selectedTemplateId && templateVariables.length > 0" class="template-hint">
-          当前模板可填变量：{{ templateVariables.join('、') }}
+          当前模板可填变量：{{ templateVariables.map(v => variableLabel(v)).join('、') }}
         </p>
         <p v-else-if="selectedTemplateId" class="template-hint text-muted">
           该模板暂无变量占位
@@ -178,7 +178,7 @@
                 <p>请先选择模板，模板中的变量将显示在此</p>
               </div>
               <ul v-else class="var-list">
-                <li v-for="v in templateVariables" :key="v" class="var-item">{{ v }}</li>
+                <li v-for="v in templateVariables" :key="v" class="var-item">{{ variableLabel(v) }}</li>
               </ul>
             </div>
           </div>
@@ -198,7 +198,7 @@
               </thead>
               <tbody>
                 <tr v-for="varName in bindableVariables" :key="varName">
-                  <td class="binding-var-name">{{ varName }}</td>
+                  <td class="binding-var-name">{{ variableLabel(varName) }}</td>
                   <td>
                     <select
                       :value="variableToColumn[varName] || ''"
@@ -308,6 +308,7 @@ import {
 import {
   templateToZPL,
   collectFillableVariables,
+  getVariableDisplayNames,
   buildImageZPLCache,
   substituteVariables,
   isRfidField,
@@ -365,6 +366,8 @@ const templateList = ref<TemplateListItem[]>([])
 const selectedTemplateId = ref('')
 const loadedTemplate = ref<LoadedTemplate | null>(null)
 const templateVariables = ref<string[]>([])
+/** 变量名 → 显示名（元素属性中的名称，用于可填变量列表与列绑定表） */
+const templateVariableDisplayNames = ref<Record<string, string>>({})
 const currentTemplateZPL = ref('')
 const loading = ref(false)
 /** 模拟数据使用的 Excel 行索引（0-based） */
@@ -376,6 +379,20 @@ const variableToColumn = reactive<Record<string, string>>({})
 const bindableVariables = computed(() =>
   templateVariables.value.filter((v) => !isRfidField(v))
 )
+
+/** 元素类型/默认名称列表：若显示名为此类通用名，则只显示变量名，避免出现「barcode (变量1)」 */
+const GENERIC_ELEMENT_NAMES = new Set([
+  'barcode', '条码', 'text', '文本', 'variable', '变量', 'rectangle', '矩形',
+  'line', '直线', 'ellipse', '椭圆', 'image', '图片', 'Barcode', 'Text', 'Variable',
+])
+
+/** 变量在界面上的显示名：优先显示用户设置的元素名称；若为类型默认名则只显示变量名 */
+function variableLabel(varName: string): string {
+  const display = templateVariableDisplayNames.value[varName]
+  if (!display || display === varName) return varName
+  if (GENERIC_ELEMENT_NAMES.has(display)) return varName
+  return `${display} (${varName})`
+}
 
 const excelInputRef = ref<HTMLInputElement | null>(null)
 const excelFileName = ref('')
@@ -436,6 +453,7 @@ async function onTemplateChange() {
   if (!id) {
     loadedTemplate.value = null
     templateVariables.value = []
+    templateVariableDisplayNames.value = {}
     currentTemplateZPL.value = ''
     Object.keys(variableToColumn).forEach((k) => { variableToColumn[k] = '' })
     return
@@ -445,6 +463,7 @@ async function onTemplateChange() {
     loadedTemplate.value = await loadTemplate(id)
     const t = loadedTemplate.value
     templateVariables.value = collectFillableVariables(t.elements)
+    templateVariableDisplayNames.value = getVariableDisplayNames(t.elements)
     const imageZPLCache = await buildImageZPLCache(t.elements, t.config)
     currentTemplateZPL.value = templateToZPL(t.config, t.elements, {
       variablePlaceholder: true,
@@ -454,6 +473,7 @@ async function onTemplateChange() {
     console.error(e)
     loadedTemplate.value = null
     templateVariables.value = []
+    templateVariableDisplayNames.value = {}
     currentTemplateZPL.value = ''
     alert('加载模板详情失败：' + (e instanceof Error ? e.message : '请稍后重试'))
   } finally {

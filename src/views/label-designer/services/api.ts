@@ -50,6 +50,7 @@ function elementToBackend(el: DesignElement): Record<string, unknown> {
   const base: Record<string, unknown> = {
     id: el.id,
     type: el.type,
+    name: el.name ?? el.type,
     x: el.x,
     y: el.y,
     width: el.width,

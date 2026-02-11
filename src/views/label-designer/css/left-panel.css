@@ -78,6 +78,60 @@
   flex-direction: column;
   gap: 6px;
 }
+.variable-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.variable-row:hover .variable-actions {
+  opacity: 1;
+}
+.variable-row .variable-btn {
+  flex: 1;
+  min-width: 0;
+}
+.variable-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.variable-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+.var-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.var-action-btn .var-action-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.var-action-rename:hover {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+.var-action-delete:hover {
+  background: #ffebee;
+  color: #c62828;
+}
 .variable-btn {
   display: flex;
   align-items: center;
@@ -96,6 +150,7 @@
 }
 .variable-icon {
   font-size: 14px;
+  flex-shrink: 0;
 }
 .add-variable-btn {
   padding: 8px 12px;

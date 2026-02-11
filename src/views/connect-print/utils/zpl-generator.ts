@@ -88,28 +88,36 @@ function sortElements(elements: DesignElement[]): DesignElement[] {
     })
 }
 
-/** 从模板元素中收集所有可填入的变量名：绑定变量的文本、variable、条码的 dataField */
+/** 从模板元素中收集所有可填入的变量名：仅包含已绑定 dataField 的文本、variable、条码（未绑定条码用属性 content，不列入变量） */
 export function collectFillableVariables(elements: DesignElement[]): string[] {
   const list: string[] = []
-  let barcodeIndex = 0
   for (const el of sortElements(elements)) {
     if (el.type === 'text') {
       const dataField = (el as TextElement).dataField
       if (dataField && !list.includes(dataField)) list.push(dataField)
     } else if (el.type === 'variable') {
-      const dataField = (el as VariableElement).dataField ?? 'TID'
-      if (!list.includes(dataField)) list.push(dataField)
+      const dataField = (el as VariableElement).dataField
+      if (dataField && !list.includes(dataField)) list.push(dataField)
     } else if (el.type === 'barcode') {
       const dataField = (el as BarcodeElement).dataField
       if (dataField && !list.includes(dataField)) list.push(dataField)
-      else if (!dataField) {
-        const key = barcodeIndex === 0 ? BARCODE_PLACEHOLDER_BASE : `${BARCODE_PLACEHOLDER_BASE}_${barcodeIndex}`
-        barcodeIndex++
-        if (!list.includes(key)) list.push(key)
-      }
+      /* 无 dataField 的条码使用属性中的 content 固定值，不加入可填变量列表 */
     }
   }
   return list
+}
+
+/** 变量名 → 显示名（取首个绑定该变量的元素的 name，用于连接打印等界面） */
+export function getVariableDisplayNames(elements: DesignElement[]): Record<string, string> {
+  const map: Record<string, string> = {}
+  for (const el of sortElements(elements)) {
+    let dataField: string | undefined
+    if (el.type === 'text') dataField = (el as TextElement).dataField
+    else if (el.type === 'variable') dataField = (el as VariableElement).dataField
+    else if (el.type === 'barcode') dataField = (el as BarcodeElement).dataField
+    if (dataField && !(dataField in map)) map[dataField] = el.name ?? dataField
+  }
+  return map
 }
 
 /** 根据模板生成完整 ZPL（条码也使用占位符；图片需传入 imageZPLCache） */
@@ -147,7 +155,6 @@ export function templateToZPL(
     if (rfidUsed.has('User Data')) parts.push('^RFR,U,0,32,1^FN3^FS')
   }
 
-  let barcodeIndex = 0
   for (const el of sorted) {
     const x = mmToDots(el.x, dpi)
     const y = mmToDots(el.y, dpi)
@@ -178,7 +185,7 @@ export function templateToZPL(
       }
       case 'variable': {
         const v = el as VariableElement
-        const field = (v.dataField ?? 'TID') as string
+        const field = (v.dataField ?? '') as string
         const fontSize = 12
         const fontHeight = Math.max(10, Math.round((fontSize / 72) * dpi))
         const fontWidth = Math.round(fontHeight * 0.6)
@@ -186,10 +193,10 @@ export function templateToZPL(
         const rotCmd = rot === 'N' ? '' : `^RO${rot}`
         const fdPrefix = '^FH\\^CI28'
         const fdSuffix = '^FS^CI27'
-        if (isRfidField(field)) {
+        if (field && isRfidField(field)) {
           const fn = RFID_ZPL_MAP[field]?.fn ?? 2
           parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FN${fn}${fdSuffix}`)
-        } else if (usePlaceholder) {
+        } else if (field && usePlaceholder) {
           parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FD${VARIABLE_PLACEHOLDER_PREFIX}${field}${VARIABLE_PLACEHOLDER_SUFFIX}${fdSuffix}`)
         } else {
           parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FD${escapeFieldData(v.sampleValue ?? '')}${fdSuffix}`)
@@ -201,13 +208,10 @@ export function templateToZPL(
         const format = (b.format ?? 'CODE128').toUpperCase().replace(/\s/g, '')
         const isQR = format === 'QR' || format === 'QRCODE'
         if (isQR) {
-          const data = usePlaceholder
-            ? (b.dataField
-                ? `${VARIABLE_PLACEHOLDER_PREFIX}${b.dataField}${VARIABLE_PLACEHOLDER_SUFFIX}`
-                : (barcodeIndex === 0 ? `${VARIABLE_PLACEHOLDER_PREFIX}${BARCODE_PLACEHOLDER_BASE}${VARIABLE_PLACEHOLDER_SUFFIX}` : `${VARIABLE_PLACEHOLDER_PREFIX}${BARCODE_PLACEHOLDER_BASE}_${barcodeIndex}${VARIABLE_PLACEHOLDER_SUFFIX}`))
+          const data = b.dataField && usePlaceholder
+            ? `${VARIABLE_PLACEHOLDER_PREFIX}${b.dataField}${VARIABLE_PLACEHOLDER_SUFFIX}`
             : (b.content ?? '').trim() || '0'
-          if (!b.dataField && !usePlaceholder) barcodeIndex++
-          const escaped = usePlaceholder ? data : escapeFieldData(data)
+          const escaped = usePlaceholder && b.dataField ? data : escapeFieldData(data)
           const mag = Math.max(1, Math.min(10, Math.round(Math.min(wEl, hEl) / 20)))
           parts.push(`^FO${x},${y}^RO${rot}^BQN,2,${mag},Q^FDMM,${escaped}^FS`)
         } else {
@@ -217,12 +221,10 @@ export function templateToZPL(
             const bcParams = format === 'CODE39' ? `B3N,N,${barHeight},Y,N` : `BCN,${barHeight},Y,N,N,A`
             parts.push(`^FO${x},${y}^RO${rot}^BY2,2^${bcParams}^FD^FN${fn}^FS`)
           } else {
-            const barKey = b.dataField || (barcodeIndex === 0 ? BARCODE_PLACEHOLDER_BASE : `${BARCODE_PLACEHOLDER_BASE}_${barcodeIndex}`)
-            if (!b.dataField) barcodeIndex++
-            const data = usePlaceholder
-              ? `${VARIABLE_PLACEHOLDER_PREFIX}${barKey}${VARIABLE_PLACEHOLDER_SUFFIX}`
+            const data = b.dataField && usePlaceholder
+              ? `${VARIABLE_PLACEHOLDER_PREFIX}${b.dataField}${VARIABLE_PLACEHOLDER_SUFFIX}`
               : (b.content ?? '').trim() || '0'
-            const escaped = usePlaceholder ? data : escapeFieldData(data)
+            const escaped = usePlaceholder && b.dataField ? data : escapeFieldData(data)
             const bcParams = format === 'CODE39' ? `B3N,N,${barHeight},Y,N` : `BCN,${barHeight},Y,N,N,A`
             parts.push(`^FO${x},${y}^RO${rot}^BY2,2^${bcParams}^FD${escaped}^FS`)
           }

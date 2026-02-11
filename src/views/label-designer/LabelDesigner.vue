@@ -15,6 +15,8 @@
         :custom-variable-names="customVariableNames"
         @add-element="onAddElement"
         @add-custom-variable="onAddCustomVariable($event)"
+        @rename-variable="onRenameVariable"
+        @delete-variable="onDeleteVariable"
         @select="selectedId = $event"
         @element-update="(p) => onElementUpdate(p.id, p.updates)"
       />
@@ -172,6 +174,28 @@ function onAddCustomVariable(customName?: string) {
   }
 }
 
+/** 重命名变量：更新列表并更新所有绑定该变量的元素的 dataField */
+function onRenameVariable(oldName: string, newName: string) {
+  const idx = customVariableNames.value.indexOf(oldName)
+  if (idx >= 0) {
+    customVariableNames.value = [...customVariableNames.value]
+    customVariableNames.value.splice(idx, 1, newName)
+  }
+  for (const el of elements.value) {
+    const df = (el as { dataField?: string }).dataField
+    if (df === oldName) (el as { dataField?: string }).dataField = newName
+  }
+}
+
+/** 删除变量：从列表移除，并解除所有绑定该变量的元素的 dataField */
+function onDeleteVariable(name: string) {
+  customVariableNames.value = customVariableNames.value.filter((n) => n !== name)
+  for (const el of elements.value) {
+    const df = (el as { dataField?: string }).dataField
+    if (df === name) (el as { dataField?: string }).dataField = ''
+  }
+}
+
 function onCanvasClick(xMm: number, yMm: number) {
   if (!pendingAdd.value) return
   pushHistory()
@@ -185,6 +209,7 @@ function onCanvasClick(xMm: number, yMm: number) {
 function onElementUpdate(id: string, updates: Partial<DesignElement>) {
   const el = elements.value.find((e) => e.id === id)
   if (!el) return
+  if (updates.name === undefined) delete (updates as Record<string, unknown>).name
   Object.assign(el, updates)
   if (el.type === 'barcode') {
     const f = ((el as any).format ?? '').toUpperCase().replace(/\s/g, '')
