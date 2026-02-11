@@ -1,3 +1,6 @@
+/**
+ * 路由配置：登录/注册、需鉴权的主布局子路由（仪表盘、模板设置、设计器、连接打印）、404 重定向
+ */
 import { createRouter, createWebHistory } from 'vue-router'
 import MainLayout from '@/components/layout/MainLayout.vue'
 
@@ -66,7 +69,7 @@ const router = createRouter({
   ]
 })
 
-// 路由守卫：检查登录状态
+/** 路由守卫：requiresAuth 且无 token 时跳转登录；已登录访问 /login|/register 时跳转首页 */
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('accessToken')
   

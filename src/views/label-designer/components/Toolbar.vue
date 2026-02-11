@@ -28,6 +28,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 设计器顶部工具栏：返回、模板名称、画布宽/高/DPI、保存
+ */
 import type { CanvasConfig } from '../types'
 
 defineProps<{

@@ -1,6 +1,11 @@
+/**
+ * 全局 API 实例：baseURL、超时、请求/响应拦截器
+ * - 请求：自动附加 Authorization: Bearer <accessToken>
+ * - 响应：505 表示 Token 过期，清除本地并跳转登录；其他错误统一 reject
+ */
 import axios from 'axios'
 
-// 定义统一的响应类型
+/** 统一业务响应格式（code/msg/data） */
 export interface ApiResponse<T = any> {
   code: number
   msg: string

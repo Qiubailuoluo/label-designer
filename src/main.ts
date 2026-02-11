@@ -1,3 +1,6 @@
+/**
+ * 应用入口：挂载 Vue 应用，注册 Pinia（状态）、Vue Router（路由）
+ */
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'

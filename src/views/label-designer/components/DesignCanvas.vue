@@ -7,6 +7,12 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 设计画布组件
+ * 使用 Fabric.js 渲染并交互，与父组件 elements/config 双向同步：
+ * - 结构变化（增删元素、画布尺寸）时先 flush 画布几何再重画，避免拖拽后尺寸回退
+ * - 属性面板修改内容/几何时按 state 直接重画；选中状态单独 watch 更新
+ */
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as fabric from 'fabric'
 import type { CanvasConfig, DesignElement } from '../types'

@@ -52,6 +52,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 模板列表页：展示模板表（名称、更新时间），支持创建、编辑、删除；编辑跳转至设计器 /label-designer/design/:id
+ */
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getTemplateList, deleteTemplate as apiDeleteTemplate, type TemplateListItem } from './services/api'

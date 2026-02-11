@@ -1,12 +1,14 @@
 /**
- * 新标签设计器 - 与后端模板接口对接
- * 复用现有 /api/templates 的请求格式，将本设计器的元素与画布配置映射过去
+ * 标签设计器 - 模板 API
+ * 与后端 /api/templates 对接：保存/加载/列表/删除。
+ * 请求自动附带 localStorage 中的 accessToken；401/403 时清除并跳转登录。
  */
 import type { DesignElement, CanvasConfig } from '../types'
 
+/** 后端 API 根路径，可按环境配置 */
 const BASE = 'http://localhost:8080/api'
 
-//***************请求头处理***************
+/** 请求头：Content-Type + 可选 Authorization */
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem('accessToken')
   const h: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -14,7 +16,7 @@ function authHeaders(): HeadersInit {
   return h
 }
 
-//***************请求处理***************
+/** 发起请求，自动附带认证头；401/403 时清除 token 并跳转登录 */
 async function request(url: string, options: RequestInit = {}) {
   const res = await fetch(url, { ...options, headers: { ...authHeaders(), ...(options.headers as object) } })
   if (res.status === 401 || res.status === 403) {
@@ -96,7 +98,7 @@ function elementToBackend(el: DesignElement): Record<string, unknown> {
   return base
 }
 
-//***************请求参数类型-保存模板***************
+/** 保存模板请求体 */
 export interface SavePayload {
   id?: string
   name: string
@@ -108,7 +110,7 @@ export interface SavePayload {
   customVariableNames?: string[]
 }
 
-//***************请求处理-保存模板***************
+/** 保存模板（新建或覆盖），返回模板 id */
 export async function saveTemplate(payload: SavePayload): Promise<{ id: string }> {
   const body = {
     template: {
@@ -141,7 +143,7 @@ export async function saveTemplate(payload: SavePayload): Promise<{ id: string }
   return { id: data?.data?.id ?? data?.id ?? payload.id ?? '' }
 }
 
-/** 后端返回的模板详情中的 config.elements 单项 */
+/** 将后端 config.elements 单项转换为设计器 DesignElement */
 function backendElementToDesign(el: any): DesignElement {
   const base = {
     id: String(el.id ?? `el_${Date.now()}`),
@@ -217,7 +219,7 @@ function backendElementToDesign(el: any): DesignElement {
   return { ...base, type: 'text', content: '', fontSize: 12, fontFamily: 'ZEBRA 0', color: '#000', textAlign: 'left', bold: false, italic: false } as DesignElement
 }
 
-//***************请求参数类型-加载模板***************
+/** 加载模板接口返回的数据结构 */
 export interface LoadedTemplate {
   id: string
   name: string
@@ -229,7 +231,7 @@ export interface LoadedTemplate {
   customVariableNames: string[]
 }
 
-//***************请求处理-加载模板***************
+/** 根据 id 加载模板详情（config + elements + customVariableNames） */
 export async function loadTemplate(id: string): Promise<LoadedTemplate> {
   const res = await request(`${BASE}/templates/${id}`)
   const json = await parseResponse(res)
@@ -255,7 +257,7 @@ export async function loadTemplate(id: string): Promise<LoadedTemplate> {
   }
 }
 
-/** 模板列表项 */
+/** 模板列表中的单项 */
 export interface TemplateListItem {
   id: string
   name: string

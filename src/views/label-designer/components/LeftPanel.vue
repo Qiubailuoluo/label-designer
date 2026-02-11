@@ -140,6 +140,12 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 左侧面板：图层列表、元素工具、RFID 变量、用户变量
+ * - 图层：按 zIndex 降序展示，支持拖拽排序、上/下移、显示/隐藏
+ * - 元素：文本/矩形/直线/椭圆/条码/图片，点击后进入「待放置」状态，在画布点击放置
+ * - RFID/用户变量：点击后在画布点击放置；用户变量支持添加/重命名/删除
+ */
 import { computed, ref } from 'vue'
 import type { DesignElement, ElementType } from '../types'
 

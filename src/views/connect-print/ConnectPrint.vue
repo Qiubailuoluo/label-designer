@@ -297,6 +297,10 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 连接打印主页面：打印机列表与连接、模板选择、Excel 导入与列绑定、ZPL 预览、单张/批量打印
+ * 依赖打印扩展与本地打印服务（见 print-extension/）；未检测到扩展时提示安装并支持重试
+ */
 import { ref, computed, reactive, onMounted, onBeforeUnmount } from 'vue'
 import * as XLSX from 'xlsx'
 import {

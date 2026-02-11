@@ -42,6 +42,12 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 标签设计器主页面
+ * - 管理画布配置、元素列表、选中项、待放置元素、撤销栈与剪贴板
+ * - 协调左侧面板（图层/元素/变量）、画布、右侧属性面板的事件与数据
+ * - 路由参数 id 存在时加载模板，保存时调用模板 API
+ */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LabelDesignerToolbar from './components/Toolbar.vue'

@@ -174,9 +174,15 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 属性面板：根据当前选中元素类型展示可编辑属性
+ * - 通用：名称、X/Y、宽高、旋转；条码 QR 时宽高合并为「尺寸」
+ * - 按类型：文本（绑定变量、内容、字体、字号、颜色、对齐、粗斜体）；矩形/线/椭圆（颜色、线宽等）；变量（绑定、标签、示例值）；条码（绑定、内容、格式）；图片（上传）
+ */
 import { computed } from 'vue'
 import type { DesignElement } from '../types'
 
+/** 可绑定为 Excel 列的 RFID 内置变量（连接打印时由打印机读取，不参与列绑定） */
 const BINDABLE_VARIABLE_OPTIONS = ['EPC', 'TID', 'User Data'] as const
 
 /** 文本字体：ZEBRA 对应 ZPL ^A 字体代号 0/D/E */
