@@ -30,6 +30,8 @@
 - **ZEBRA SimSun**：`^A@N,height,width,SIMSUN.TTF`（按字体文件名）
 - **ZEBRA Swiss Unicode**：`^A@N,height,width,TT0003M_`
 - 文本前加 `^FH\^CI28`、后加 `^CI27` 以支持 UTF-8/中文。
+- **RFID 读取打印**：按成功示例，先 `^FT x,y ^A0N,h,w ^FNn ^FS` 定义位置，再 `^FNn^RFR,...^FS` 读取到该字段。TID=^FN1^RFR,H,0,12,2；EPC=^FN2^RFR,H,2,16,1；User Data=^FN3^RFR,U,0,32,1。打印 ^FN 时不使用 ^CI28/^CI27。
+- **RFID 写入 EPC**：`^RS8` 后 `^RFW,H,1,12^FD十六进制^FS`。TID 出厂不可写；User Data 用 ^RFW,U,0,len,1。
 
 若打印机字体路径或文件名不同（如需 R:SIMSUN.TTF），可反馈后改 `getZPLFontCommand`。
 

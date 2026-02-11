@@ -1,12 +1,15 @@
 /**
  * ZPL（Zebra Programming Language）生成器
  * 根据标签设计器模板（画布配置 + 元素）生成完整 ZPL 指令。
- * - EPC/TID/User Data：由打印机从 RFID 标签读取，生成 ^RFR + ^FN 指令。
- * - 其他变量（变量1、条码等）：输出占位符 {{变量名}}，批量打印时用 Excel 替换。
- * 图片支持生成 ^GF 图形指令（需异步预生成 imageZPLCache）。
  *
+ * 变量与 RFID 语义：
+ * - EPC/TID/User Data：表示**从 RFID 标签读取**该存储区的内容，并在用户设定的模板位置**打印读到的值**，
+ *   不是打印固定文字 "EPC"/"TID"/"User Data"。ZPL 中通过 ^RFR 读取到 ^FN1/^FN2/^FN3，再在 ^FT x,y 处用 ^FNn 输出。
+ * - 打印 ^FNn 时**不使用** ^FH\^CI28/^CI27（UTF-8），以免把标签数据当 UTF-8 解析导致乱码；标签读出的数据多为单字节或 hex，用打印机默认编码即可。
+ * - 其他变量（变量1、条码等）：输出占位符 {{变量名}}，批量打印时用 Excel 替换。
+ *
+ * 图片支持生成 ^GF 图形指令（需异步预生成 imageZPLCache）。
  * 官方参考：https://docs.zebra.com/us/en/printers/software/zpl-pg/c-zpl-zpl-commands.html
- * 当前使用：^A(字体), ^BC(Code128), ^B3(Code39), ^BQ(QR), ^BY(条码宽高)。
  * 若真机测试与预期不符，请根据 docs/zpl-command-reference.md 反馈正确格式以便修改。
  */
 import type { DesignElement, CanvasConfig } from '@/views/label-designer/types'
@@ -19,18 +22,24 @@ export const VARIABLE_PLACEHOLDER_SUFFIX = '}}'
 /** 条码占位符名前缀，第一个条码=条码，第二个=条码_2 */
 export const BARCODE_PLACEHOLDER_BASE = '条码'
 
-/** 由 RFID 读取的变量，不从 Excel 绑定；ZPL 中生成 ^RFR 读取指令 */
+/** 由 RFID 读取的变量：打印机从标签读取该存储区内容，在模板位置打印读到的值；不从 Excel 绑定 */
 export const RFID_FIELD_NAMES = ['EPC', 'TID', 'User Data'] as const
 
 export function isRfidField(dataField: string): boolean {
   return RFID_FIELD_NAMES.includes(dataField as (typeof RFID_FIELD_NAMES)[number])
 }
 
-/** RFID 类型对应的 ZPL ^RFR 内存码与 ^FN 编号：E=EPC, H=TID, U=User */
-const RFID_ZPL_MAP: Record<string, { rfr: string; fn: number }> = {
-  EPC: { rfr: 'E', fn: 1 },
-  TID: { rfr: 'H', fn: 2 },
-  'User Data': { rfr: 'U', fn: 3 },
+/**
+ * RFID 读取：按成功示例约定
+ * - TID：^FN1^RFR,H,0,12,2^FS（H=内存, 起始块0, 长度12, 参数2）
+ * - EPC：^FN2^RFR,H,2,16,1^FS（H=内存, 起始块2, 长度16, 参数1）
+ * - User Data：^FN3^RFR,U,0,32,1^FS（U=User 内存）
+ * 顺序：先 ^FT x,y ^A0N ^FNn ^FS 定义打印位置，再 ^FNn^RFR,...^FS 读取到该字段
+ */
+const RFID_ZPL_MAP: Record<string, { fn: number; rfr: string }> = {
+  TID: { fn: 1, rfr: 'H,0,12,2' },
+  EPC: { fn: 2, rfr: 'H,2,16,1' },
+  'User Data': { fn: 3, rfr: 'U,0,32,1' },
 }
 
 /**
@@ -148,12 +157,7 @@ export function templateToZPL(
     const df = (el as { dataField?: string }).dataField
     if (df && isRfidField(df)) rfidUsed.add(df)
   }
-  if (rfidUsed.size > 0) {
-    parts.push('^RS8')
-    if (rfidUsed.has('EPC')) parts.push('^RFR,E,0,24,1^FN1^FS')
-    if (rfidUsed.has('TID')) parts.push('^RFR,H,0,12,1^FN2^FS')
-    if (rfidUsed.has('User Data')) parts.push('^RFR,U,0,32,1^FN3^FS')
-  }
+  if (rfidUsed.size > 0) parts.push('^RS8')
 
   for (const el of sorted) {
     const x = mmToDots(el.x, dpi)
@@ -173,8 +177,11 @@ export function templateToZPL(
         const fdPrefix = '^FH\\^CI28'
         const fdSuffix = '^FS^CI27'
         if (t.dataField && isRfidField(t.dataField)) {
-          const fn = RFID_ZPL_MAP[t.dataField]?.fn ?? 1
-          parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FN${fn}${fdSuffix}`)
+          const info = RFID_ZPL_MAP[t.dataField]
+          if (info) {
+            parts.push(`^FT${x},${y}${rotCmd}${aCmd}^FN${info.fn}^FS`)
+            parts.push(`^FN${info.fn}^RFR,${info.rfr}^FS`)
+          }
         } else if (t.dataField && usePlaceholder) {
           parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FD${VARIABLE_PLACEHOLDER_PREFIX}${t.dataField}${VARIABLE_PLACEHOLDER_SUFFIX}${fdSuffix}`)
         } else {
@@ -194,8 +201,11 @@ export function templateToZPL(
         const fdPrefix = '^FH\\^CI28'
         const fdSuffix = '^FS^CI27'
         if (field && isRfidField(field)) {
-          const fn = RFID_ZPL_MAP[field]?.fn ?? 2
-          parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FN${fn}${fdSuffix}`)
+          const info = RFID_ZPL_MAP[field]
+          if (info) {
+            parts.push(`^FT${x},${y}${rotCmd}${aCmd}^FN${info.fn}^FS`)
+            parts.push(`^FN${info.fn}^RFR,${info.rfr}^FS`)
+          }
         } else if (field && usePlaceholder) {
           parts.push(`^FT${x},${y}${rotCmd}${aCmd}${fdPrefix}^FD${VARIABLE_PLACEHOLDER_PREFIX}${field}${VARIABLE_PLACEHOLDER_SUFFIX}${fdSuffix}`)
         } else {
@@ -217,9 +227,12 @@ export function templateToZPL(
         } else {
           const barHeight = Math.max(20, hEl)
           if (b.dataField && isRfidField(b.dataField)) {
-            const fn = RFID_ZPL_MAP[b.dataField]?.fn ?? 1
-            const bcParams = format === 'CODE39' ? `B3N,N,${barHeight},Y,N` : `BCN,${barHeight},Y,N,N,A`
-            parts.push(`^FO${x},${y}^RO${rot}^BY2,2^${bcParams}^FD^FN${fn}^FS`)
+            const info = RFID_ZPL_MAP[b.dataField]
+            if (info) {
+              parts.push(`^FN${info.fn}^RFR,${info.rfr}^FS`)
+              const bcParams = format === 'CODE39' ? `B3N,N,${barHeight},Y,N` : `BCN,${barHeight},Y,N,N,A`
+              parts.push(`^FO${x},${y}^RO${rot}^BY2,2^${bcParams}^FD^FN${info.fn}^FS`)
+            }
           } else {
             const data = b.dataField && usePlaceholder
               ? `${VARIABLE_PLACEHOLDER_PREFIX}${b.dataField}${VARIABLE_PLACEHOLDER_SUFFIX}`
@@ -386,4 +399,36 @@ export function batchZPLFromRows(
     }
     return substituteVariables(zplTemplate, vars)
   })
+}
+
+/**
+ * 写入 RFID：按成功示例 EPC 写入 ^RFW,H,1,12^FD...^FS（H, 块1, 12 字）。
+ * TID 为出厂设置不允许修改，一般不写入；User Data 无示例，用 U,0,len,1。
+ */
+export function buildRfidWriteZPL(writes: { field: 'EPC' | 'TID' | 'User Data'; value: string }[]): string {
+  if (writes.length === 0) return ''
+  const parts: string[] = []
+  for (const w of writes) {
+    const value = String(w.value || '').replace(/\s/g, '').toUpperCase()
+    if (!value) continue
+    if (w.field === 'EPC') {
+      parts.push(`^RFW,H,1,12^FD${value}^FS`)
+    } else if (w.field === 'User Data') {
+      const lenWords = Math.max(1, Math.min(Math.ceil(value.length / 4), 64))
+      parts.push(`^RFW,U,0,${lenWords},1^FD${value}^FS`)
+    }
+  }
+  return parts.join('\n')
+}
+
+/**
+ * 在已有 ZPL 的 ^XA 之后插入「写入 RFID」片段（若有），再接原 ZPL 的 ^PW 等。
+ * 用于：先写 EPC/TID/User Data，再读并打印。
+ */
+export function injectRfidWriteIntoZPL(zpl: string, writeZPL: string): string {
+  if (!writeZPL || !zpl.includes('^XA')) return zpl
+  const afterXA = zpl.indexOf('^XA') + 3
+  const head = zpl.slice(0, afterXA)
+  const rest = zpl.slice(afterXA)
+  return head + '\n' + writeZPL + '\n' + rest
 }

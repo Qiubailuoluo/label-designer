@@ -94,7 +94,7 @@
 
           <div class="connection-actions">
             <button type="button" class="btn-primary" @click="applyConnection">应用连接</button>
-            <button type="button" class="btn-secondary" @click="refreshPrinters">刷新打印机列表</button>
+            <button type="button" class="btn-secondary" @click="() => refreshPrinters()">刷新打印机列表</button>
           </div>
           <p v-if="extensionAvailable" class="connection-status">打印扩展已连接</p>
         </div>
@@ -216,6 +216,59 @@
           <p v-else-if="templateVariables.some(v => isRfidField(v))" class="text-muted binding-rfid-hint">当前模板仅使用 EPC/TID/User Data（由打印机从 RFID 标签读取），无需绑定 Excel 列。</p>
         </div>
 
+        <!-- 写入RFID：打印前先写入 EPC/TID/User Data，点击对应行「填写」弹出表格输入要写入的内容 -->
+        <div class="rfid-write-section">
+          <h4 class="zpl-section-title">写入RFID</h4>
+          <p class="simulate-desc">打印前将指定内容写入标签的 EPC/TID/User Data 区；填写后打印时会在 ZPL 中插入写入指令。标签上显示的是<strong>读取</strong>到的值，不是固定文字。</p>
+          <div class="binding-table-wrap">
+            <table class="binding-table">
+              <thead>
+                <tr>
+                  <th>存储区</th>
+                  <th>要写入的值（十六进制）</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="field in rfidWriteFields" :key="field">
+                  <td class="binding-var-name">{{ field }}</td>
+                  <td>
+                    <span v-if="rfidWriteConfig[field]" class="rfid-write-preview">{{ rfidWriteConfig[field] }}</span>
+                    <span v-else class="text-muted">— 未填写 —</span>
+                  </td>
+                  <td>
+                    <button type="button" class="btn-secondary btn-sm" @click="openRfidWriteDialog(field)">
+                      填写
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 写入RFID 弹窗：选择存储区后填写要写入的内容 -->
+        <div v-if="showRfidWriteDialog" class="rfid-write-dialog-overlay" @click.self="closeRfidWriteDialog">
+          <div class="rfid-write-dialog">
+            <h4 class="rfid-write-dialog-title">写入RFID — {{ rfidWriteEditingField }}</h4>
+            <p class="rfid-write-dialog-hint">请输入要写入该存储区的内容（十六进制，如 EPC：0123456789ABCDEF）。</p>
+            <div class="rfid-write-dialog-form">
+              <label>要写入的值（十六进制）</label>
+              <input
+                v-model="rfidWriteEditingValue"
+                type="text"
+                class="rfid-write-input"
+                placeholder="例如：0123456789ABCDEF"
+                @keydown.enter="confirmRfidWrite"
+              />
+            </div>
+            <div class="rfid-write-dialog-actions">
+              <button type="button" class="btn-secondary" @click="closeRfidWriteDialog">取消</button>
+              <button type="button" class="btn-primary" @click="confirmRfidWrite">确定</button>
+            </div>
+          </div>
+        </div>
+
         <!-- 生成的 ZPL：放在 Excel 展示区下方 -->
         <div class="zpl-section">
           <h4 class="zpl-section-title">生成的 ZPL</h4>
@@ -231,7 +284,7 @@
                 复制 ZPL
               </button>
             </template>
-            <p v-else class="text-muted">选择模板后将根据设计生成 ZPL 指令（变量、条码均为可填变量，占位符用 Excel 数据替换）</p>
+            <p v-else class="text-muted">选择模板后将根据设计生成 ZPL 指令。EPC/TID/User Data 在标签上显示为打印机从 RFID 读取的内容；其他变量、条码为占位符，用 Excel 列替换。</p>
           </div>
         </div>
 
@@ -317,6 +370,8 @@ import {
   substituteVariables,
   isRfidField,
   batchZPLFromRows,
+  buildRfidWriteZPL,
+  injectRfidWriteIntoZPL,
 } from './utils/zpl-generator'
 import {
   isExtensionAvailable,
@@ -331,6 +386,9 @@ const CACHE_TTL_MS = 4 * 60 * 60 * 1000 // 4 小时
 
 type ConnectionType = 'usb' | 'tcp'
 
+/** 写入RFID 的存储区 */
+const RFID_WRITE_FIELDS: ('EPC' | 'TID' | 'User Data')[] = ['EPC', 'TID', 'User Data']
+
 interface ConnectPrintCache {
   savedAt: number
   connectionType: ConnectionType
@@ -341,6 +399,7 @@ interface ConnectPrintCache {
   excelFileName: string
   excelHeaders: string[]
   excelRows: Record<string, string | number>[]
+  rfidWriteConfig?: Record<string, string>
 }
 
 interface PrinterItem {
@@ -379,6 +438,13 @@ const simulateRowIndex = ref(0)
 /** 变量名 → Excel 列名（表头）的绑定 */
 const variableToColumn = reactive<Record<string, string>>({})
 
+/** 写入RFID：存储区 → 要写入的十六进制字符串（打印前插入 ^RFW 指令） */
+const rfidWriteConfig = reactive<Record<string, string>>({ EPC: '', TID: '', 'User Data': '' })
+const rfidWriteFields = RFID_WRITE_FIELDS
+const showRfidWriteDialog = ref(false)
+const rfidWriteEditingField = ref<'EPC' | 'TID' | 'User Data' | null>(null)
+const rfidWriteEditingValue = ref('')
+
 /** 可绑定 Excel 的变量（排除 EPC、TID、User Data，它们由 RFID 读取） */
 const bindableVariables = computed(() =>
   templateVariables.value.filter((v) => !isRfidField(v))
@@ -413,21 +479,25 @@ const filteredPrinters = computed(() => {
   )
 })
 
-/** 模拟数据：用列绑定 + 所选 Excel 行替换 ZPL 占位符后的结果 */
+/** 模拟数据：用列绑定 + 所选 Excel 行替换占位符，并注入「写入RFID」（若有配置）后的 ZPL */
 const simulatedZPL = computed(() => {
   const zpl = currentTemplateZPL.value
   if (!zpl) return ''
+  let out = zpl
   const rows = excelRows.value
-  if (!rows.length) return zpl
-  const idx = Math.min(simulateRowIndex.value, rows.length - 1)
-  const row = rows[idx]
-  if (!row) return zpl
-  const vars: Record<string, string | number> = {}
-  for (const varName of templateVariables.value) {
-    const col = variableToColumn[varName]
-    if (col && col.trim() && col in row) vars[varName] = row[col]
+  if (rows.length) {
+    const idx = Math.min(simulateRowIndex.value, rows.length - 1)
+    const row = rows[idx]
+    if (row) {
+      const vars: Record<string, string | number> = {}
+      for (const varName of templateVariables.value) {
+        const col = variableToColumn[varName]
+        if (col && col.trim() && col in row) vars[varName] = row[col]
+      }
+      out = substituteVariables(zpl, vars)
+    }
   }
-  return substituteVariables(zpl, vars)
+  return zplWithRfidWrite(out)
 })
 
 async function loadTemplateList() {
@@ -450,6 +520,35 @@ function onBindingChange(varName: string, columnName: string) {
 function onBindingChangeSelect(e: Event, varName: string) {
   const value = (e.target as HTMLSelectElement)?.value ?? ''
   onBindingChange(varName, value)
+}
+
+function openRfidWriteDialog(field: 'EPC' | 'TID' | 'User Data') {
+  rfidWriteEditingField.value = field
+  rfidWriteEditingValue.value = rfidWriteConfig[field] || ''
+  showRfidWriteDialog.value = true
+}
+
+function closeRfidWriteDialog() {
+  showRfidWriteDialog.value = false
+  rfidWriteEditingField.value = null
+  rfidWriteEditingValue.value = ''
+}
+
+function confirmRfidWrite() {
+  const field = rfidWriteEditingField.value
+  if (field) {
+    const value = String(rfidWriteEditingValue.value || '').replace(/\s/g, '').toUpperCase()
+    rfidWriteConfig[field] = value
+  }
+  closeRfidWriteDialog()
+}
+
+/** 根据当前「写入RFID」配置生成要插入的 ZPL 片段，并注入到完整 ZPL 中 */
+function zplWithRfidWrite(zpl: string): string {
+  const writes = RFID_WRITE_FIELDS.filter((f) => rfidWriteConfig[f]?.trim())
+  if (writes.length === 0) return zpl
+  const writeZPL = buildRfidWriteZPL(writes.map((field) => ({ field, value: rfidWriteConfig[field] })))
+  return injectRfidWriteIntoZPL(zpl, writeZPL)
 }
 
 async function onTemplateChange() {
@@ -566,11 +665,12 @@ function getColumnToVariable(): Record<string, string> {
 
 async function doPrintCurrentRow() {
   if (!selectedPrinter.value || !currentTemplateZPL.value) return
-  const zpl = simulatedZPL.value
+  let zpl = simulatedZPL.value
   if (!zpl) {
     alert('无可用 ZPL，请选择模板并导入 Excel')
     return
   }
+  zpl = zplWithRfidWrite(zpl)
   printBusy.value = true
   try {
     const pid = selectedPrinter.value.id
@@ -588,7 +688,8 @@ async function doPrintCurrentRow() {
 async function doPrintBatch() {
   if (!selectedPrinter.value || !currentTemplateZPL.value || !excelRows.value.length) return
   const columnToVariable = getColumnToVariable()
-  const zplList = batchZPLFromRows(currentTemplateZPL.value, excelRows.value, columnToVariable)
+  let zplList = batchZPLFromRows(currentTemplateZPL.value, excelRows.value, columnToVariable)
+  zplList = zplList.map((z) => zplWithRfidWrite(z))
   printBusy.value = true
   try {
     const pid = selectedPrinter.value.id
@@ -654,6 +755,7 @@ function saveConnectPrintCache() {
       excelFileName: excelFileName.value,
       excelHeaders: [...excelHeaders.value],
       excelRows: excelRows.value.map((r) => ({ ...r })),
+      rfidWriteConfig: { ...rfidWriteConfig },
     }
     localStorage.setItem(CONNECT_PRINT_CACHE_KEY, JSON.stringify(payload))
   } catch (e) {
@@ -694,6 +796,11 @@ async function initPage() {
     if (cached.variableToColumn && typeof cached.variableToColumn === 'object') {
       Object.assign(variableToColumn, cached.variableToColumn)
     }
+  }
+  if (cached.rfidWriteConfig && typeof cached.rfidWriteConfig === 'object') {
+    RFID_WRITE_FIELDS.forEach((f) => {
+      if (typeof cached.rfidWriteConfig![f] === 'string') rfidWriteConfig[f] = cached.rfidWriteConfig![f]
+    })
   }
 }
 
