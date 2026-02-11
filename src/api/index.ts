@@ -44,7 +44,7 @@ api.interceptors.response.use(
   (error) => {
     // 统一错误处理
     if (error.response) {
-      const { status, data } = error.response
+      const { data } = error.response
       
       // Token过期处理
       if (data.code === 505) {

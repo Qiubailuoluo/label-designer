@@ -13,6 +13,12 @@
   overflow-y: auto;
   overflow-x: hidden;
 }
+.designer-collapse {
+  border: none;
+}
+.designer-collapse .el-collapse-item__header { border-bottom: 1px solid #eee; background: #fafafa; padding-left: 12px; }
+.designer-collapse .el-collapse-item__wrap { border-bottom: none; }
+.designer-collapse .el-collapse-item__content { padding: 10px 12px; }
 .panel-section {
   padding: 12px;
   border-bottom: 1px solid #eee;

@@ -21,7 +21,9 @@
         @element-update="(p) => onElementUpdate(p.id, p.updates)"
       />
       <div class="canvas-area">
-        <div v-if="pendingAdd" class="placement-hint">请在画布上点击以放置「{{ pendingAddName }}」</div>
+        <el-alert v-if="pendingAdd" type="info" :closable="false" class="placement-hint" show-icon>
+              请在画布上点击以放置「{{ pendingAddName }}」
+            </el-alert>
         <DesignCanvas
           :config="canvasConfig"
           :elements="elements"

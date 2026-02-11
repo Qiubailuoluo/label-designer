@@ -4,10 +4,12 @@
       <span class="title">属性</span>
     </div>
     <template v-if="!element">
-      <div class="no-selection">
-        <p>未选定项目</p>
-        <p class="hint">选择设计表面上的一个或多个项目，以编辑其属性。</p>
-      </div>
+      <el-empty class="no-selection">
+        <template #description>
+          <span>未选定项目</span>
+          <p class="hint">选择设计表面上的一个或多个项目，以编辑其属性。</p>
+        </template>
+      </el-empty>
     </template>
     <template v-else>
       <div class="props-body">
@@ -166,7 +168,7 @@
         </template>
 
         <div class="prop-actions">
-          <button type="button" class="btn-delete" @click="emitDelete">删除元素</button>
+          <el-button type="danger" plain @click="emitDelete">删除元素</el-button>
         </div>
       </div>
     </template>

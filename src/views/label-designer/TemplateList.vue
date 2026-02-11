@@ -3,50 +3,40 @@
     <div class="page-header">
       <div class="header-content">
         <h1>模板设置</h1>
-        <button class="create-template-btn" @click="createTemplate">
-          <span class="btn-icon">+</span> 创建模板
-        </button>
+        <el-button type="primary" @click="createTemplate">
+          <el-icon><Plus /></el-icon>
+          创建模板
+        </el-button>
       </div>
       <p class="page-desc">点击「创建模板」新建标签，或点击「编辑」修改已有模板。</p>
     </div>
 
     <div class="template-table-container">
-      <table class="template-table">
-        <thead>
-          <tr>
-            <th>模板名称</th>
-            <th>更新时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="template in templates" :key="template.id">
-            <td class="template-name">
-              <div class="name-wrapper">
-                <span class="template-icon">🏷️</span>
-                {{ template.name }}
-              </div>
-            </td>
-            <td class="update-time">{{ formatDate(template.updatedAt) }}</td>
-            <td class="actions">
-              <button class="action-btn edit-btn" @click="editTemplate(template.id)">编辑</button>
-              <button class="action-btn delete-btn" @click="deleteTemplate(template.id)">删除</button>
-            </td>
-          </tr>
-          <tr v-if="templates.length === 0">
-            <td colspan="3" class="empty-state">
-              <div class="empty-content">
-                <div class="empty-icon">📁</div>
-                <p>暂无模板，点击"创建模板"开始创建</p>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <el-table :data="templates" stripe style="width: 100%">
+        <el-table-column prop="name" label="模板名称" min-width="200">
+          <template #default="{ row }">
+            <span class="template-icon">🏷️</span>
+            {{ row.name }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="updatedAt" label="更新时间" width="180">
+          <template #default="{ row }">{{ formatDate(row.updatedAt) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="160" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link @click="editTemplate(row.id)">编辑</el-button>
+            <el-button type="danger" link @click="deleteTemplate(row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty description="暂无模板，点击「创建模板」开始创建" />
+        </template>
+      </el-table>
     </div>
 
     <div v-if="loading" class="loading-overlay">
-      <div class="loading-spinner">加载中...</div>
+      <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+      <span>加载中...</span>
     </div>
   </div>
 </template>
@@ -55,6 +45,8 @@
 /**
  * 模板列表页：展示模板表（名称、更新时间），支持创建、编辑、删除；编辑跳转至设计器 /label-designer/design/:id
  */
+import { Plus, Loading } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getTemplateList, deleteTemplate as apiDeleteTemplate, type TemplateListItem } from './services/api'
@@ -70,7 +62,7 @@ const loadTemplates = async () => {
   } catch (e) {
     console.error(e)
     templates.value = []
-    alert('加载模板列表失败：' + (e instanceof Error ? e.message : '请稍后重试'))
+    ElMessage.error('加载模板列表失败：' + (e instanceof Error ? e.message : '请稍后重试'))
   } finally {
     loading.value = false
   }
@@ -91,14 +83,22 @@ const editTemplate = (id: string) => {
 }
 
 const deleteTemplate = async (id: string) => {
-  if (!confirm('确定要删除这个模板吗？')) return
+  try {
+    await ElMessageBox.confirm('确定要删除这个模板吗？', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
   try {
     await apiDeleteTemplate(id)
     templates.value = templates.value.filter((t) => t.id !== id)
-    alert('模板删除成功')
+    ElMessage.success('模板删除成功')
   } catch (e) {
     console.error(e)
-    alert('删除模板失败：' + (e instanceof Error ? e.message : '请稍后重试'))
+    ElMessage.error('删除模板失败：' + (e instanceof Error ? e.message : '请稍后重试'))
   }
 }
 

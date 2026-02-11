@@ -70,7 +70,7 @@ const router = createRouter({
 })
 
 /** 路由守卫：requiresAuth 且无 token 时跳转登录；已登录访问 /login|/register 时跳转首页 */
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('accessToken')
   
   // 如果访问需要登录的页面且没有token，跳转到登录页

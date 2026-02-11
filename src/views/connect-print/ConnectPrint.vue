@@ -132,7 +132,6 @@
         <div class="batch-toolbar">
           <label class="btn-secondary file-label">
             <input
-              ref="excelInputRef"
               type="file"
               accept=".xlsx,.xls"
               class="file-input"
@@ -216,10 +215,10 @@
           <p v-else-if="templateVariables.some(v => isRfidField(v))" class="text-muted binding-rfid-hint">当前模板仅使用 EPC/TID/User Data（由打印机从 RFID 标签读取），无需绑定 Excel 列。</p>
         </div>
 
-        <!-- 写入RFID：打印前先写入 EPC/TID/User Data，点击对应行「填写」弹出表格输入要写入的内容 -->
+        <!-- 写入RFID：仅 EPC，打印前写入标签 EPC 区 -->
         <div class="rfid-write-section">
-          <h4 class="zpl-section-title">写入RFID</h4>
-          <p class="simulate-desc">打印前将指定内容写入标签的 EPC/TID/User Data 区；填写后打印时会在 ZPL 中插入写入指令。标签上显示的是<strong>读取</strong>到的值，不是固定文字。</p>
+          <h4 class="zpl-section-title">写入RFID（EPC）</h4>
+          <p class="simulate-desc">打印前将十六进制内容写入标签的 EPC 区；填写后打印时会在 ZPL 中插入写入指令。</p>
           <div class="binding-table-wrap">
             <table class="binding-table">
               <thead>
@@ -230,16 +229,14 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="field in rfidWriteFields" :key="field">
-                  <td class="binding-var-name">{{ field }}</td>
+                <tr>
+                  <td class="binding-var-name">EPC</td>
                   <td>
-                    <span v-if="rfidWriteConfig[field]" class="rfid-write-preview">{{ rfidWriteConfig[field] }}</span>
+                    <span v-if="rfidWriteEpc" class="rfid-write-preview">{{ rfidWriteEpc }}</span>
                     <span v-else class="text-muted">— 未填写 —</span>
                   </td>
                   <td>
-                    <button type="button" class="btn-secondary btn-sm" @click="openRfidWriteDialog(field)">
-                      填写
-                    </button>
+                    <button type="button" class="btn-secondary btn-sm" @click="openRfidWriteEpcDialog">填写</button>
                   </td>
                 </tr>
               </tbody>
@@ -247,11 +244,11 @@
           </div>
         </div>
 
-        <!-- 写入RFID 弹窗：选择存储区后填写要写入的内容 -->
+        <!-- 写入 EPC 弹窗 -->
         <div v-if="showRfidWriteDialog" class="rfid-write-dialog-overlay" @click.self="closeRfidWriteDialog">
           <div class="rfid-write-dialog">
-            <h4 class="rfid-write-dialog-title">写入RFID — {{ rfidWriteEditingField }}</h4>
-            <p class="rfid-write-dialog-hint">请输入要写入该存储区的内容（十六进制，如 EPC：0123456789ABCDEF）。</p>
+            <h4 class="rfid-write-dialog-title">写入RFID — EPC</h4>
+            <p class="rfid-write-dialog-hint">请输入要写入 EPC 的内容（十六进制，如 0123456789ABCDEF）。</p>
             <div class="rfid-write-dialog-form">
               <label>要写入的值（十六进制）</label>
               <input
@@ -379,15 +376,13 @@ import {
   addConnection,
   printZPL,
   printZPLBatch,
+  type PrinterItem,
 } from './utils/print-bridge'
 
 const CONNECT_PRINT_CACHE_KEY = 'connectPrintCache'
 const CACHE_TTL_MS = 4 * 60 * 60 * 1000 // 4 小时
 
 type ConnectionType = 'usb' | 'tcp'
-
-/** 写入RFID 的存储区 */
-const RFID_WRITE_FIELDS: ('EPC' | 'TID' | 'User Data')[] = ['EPC', 'TID', 'User Data']
 
 interface ConnectPrintCache {
   savedAt: number
@@ -399,13 +394,7 @@ interface ConnectPrintCache {
   excelFileName: string
   excelHeaders: string[]
   excelRows: Record<string, string | number>[]
-  rfidWriteConfig?: Record<string, string>
-}
-
-interface PrinterItem {
-  id: string
-  name: string
-  address?: string
+  rfidWriteEpc?: string
 }
 
 const extensionAvailable = ref(false)
@@ -438,11 +427,9 @@ const simulateRowIndex = ref(0)
 /** 变量名 → Excel 列名（表头）的绑定 */
 const variableToColumn = reactive<Record<string, string>>({})
 
-/** 写入RFID：存储区 → 要写入的十六进制字符串（打印前插入 ^RFW 指令） */
-const rfidWriteConfig = reactive<Record<string, string>>({ EPC: '', TID: '', 'User Data': '' })
-const rfidWriteFields = RFID_WRITE_FIELDS
+/** 写入RFID：仅 EPC，打印前插入 ^RFW 指令 */
+const rfidWriteEpc = ref('')
 const showRfidWriteDialog = ref(false)
-const rfidWriteEditingField = ref<'EPC' | 'TID' | 'User Data' | null>(null)
 const rfidWriteEditingValue = ref('')
 
 /** 可绑定 Excel 的变量（排除 EPC、TID、User Data，它们由 RFID 读取） */
@@ -464,7 +451,6 @@ function variableLabel(varName: string): string {
   return `${display} (${varName})`
 }
 
-const excelInputRef = ref<HTMLInputElement | null>(null)
 const excelFileName = ref('')
 const excelHeaders = ref<string[]>([])
 const excelRows = ref<Record<string, string | number>[]>([])
@@ -522,32 +508,26 @@ function onBindingChangeSelect(e: Event, varName: string) {
   onBindingChange(varName, value)
 }
 
-function openRfidWriteDialog(field: 'EPC' | 'TID' | 'User Data') {
-  rfidWriteEditingField.value = field
-  rfidWriteEditingValue.value = rfidWriteConfig[field] || ''
+function openRfidWriteEpcDialog() {
+  rfidWriteEditingValue.value = rfidWriteEpc.value || ''
   showRfidWriteDialog.value = true
 }
 
 function closeRfidWriteDialog() {
   showRfidWriteDialog.value = false
-  rfidWriteEditingField.value = null
   rfidWriteEditingValue.value = ''
 }
 
 function confirmRfidWrite() {
-  const field = rfidWriteEditingField.value
-  if (field) {
-    const value = String(rfidWriteEditingValue.value || '').replace(/\s/g, '').toUpperCase()
-    rfidWriteConfig[field] = value
-  }
+  const value = String(rfidWriteEditingValue.value || '').replace(/\s/g, '').toUpperCase()
+  rfidWriteEpc.value = value
   closeRfidWriteDialog()
 }
 
-/** 根据当前「写入RFID」配置生成要插入的 ZPL 片段，并注入到完整 ZPL 中 */
+/** 若已填写 EPC 写入，在 ZPL 中插入 ^RFW 片段 */
 function zplWithRfidWrite(zpl: string): string {
-  const writes = RFID_WRITE_FIELDS.filter((f) => rfidWriteConfig[f]?.trim())
-  if (writes.length === 0) return zpl
-  const writeZPL = buildRfidWriteZPL(writes.map((field) => ({ field, value: rfidWriteConfig[field] })))
+  if (!rfidWriteEpc.value?.trim()) return zpl
+  const writeZPL = buildRfidWriteZPL([{ field: 'EPC', value: rfidWriteEpc.value }])
   return injectRfidWriteIntoZPL(zpl, writeZPL)
 }
 
@@ -755,7 +735,7 @@ function saveConnectPrintCache() {
       excelFileName: excelFileName.value,
       excelHeaders: [...excelHeaders.value],
       excelRows: excelRows.value.map((r) => ({ ...r })),
-      rfidWriteConfig: { ...rfidWriteConfig },
+      rfidWriteEpc: rfidWriteEpc.value,
     }
     localStorage.setItem(CONNECT_PRINT_CACHE_KEY, JSON.stringify(payload))
   } catch (e) {
@@ -797,10 +777,10 @@ async function initPage() {
       Object.assign(variableToColumn, cached.variableToColumn)
     }
   }
-  if (cached.rfidWriteConfig && typeof cached.rfidWriteConfig === 'object') {
-    RFID_WRITE_FIELDS.forEach((f) => {
-      if (typeof cached.rfidWriteConfig![f] === 'string') rfidWriteConfig[f] = cached.rfidWriteConfig![f]
-    })
+  if (typeof cached.rfidWriteEpc === 'string') rfidWriteEpc.value = cached.rfidWriteEpc
+  else {
+    const old = (cached as unknown as { rfidWriteConfig?: Record<string, string> }).rfidWriteConfig?.EPC
+    if (typeof old === 'string') rfidWriteEpc.value = old
   }
 }
 

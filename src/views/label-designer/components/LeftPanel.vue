@@ -1,12 +1,8 @@
 <template>
   <div class="left-panel">
     <div class="left-panel-scroll">
-      <section class="panel-section layer-section">
-        <h3 class="section-title collapsible" @click="toggleSection('layers')">
-          <span class="section-chevron">{{ sectionOpen.layers ? '▼' : '▶' }}</span>
-          图层
-        </h3>
-        <div v-show="sectionOpen.layers" class="section-body">
+      <el-collapse v-model="activeNames" class="designer-collapse">
+        <el-collapse-item title="图层" name="layers">
           <div class="layer-list">
         <div
           v-for="(el, index) in layersByZIndex"
@@ -24,117 +20,79 @@
           <span class="layer-icon">{{ typeIcon(el.type) }}</span>
           <span class="layer-name">{{ el.name }}</span>
           <div class="layer-actions" @mousedown.stop @click.stop>
-            <button
-              type="button"
-              class="layer-move"
+            <el-button
+              type="primary"
+              link
+              size="small"
               title="上移一层"
               :disabled="index === 0"
               @click.stop="moveLayer(el, index, 'up')"
-            >
-              ▲
-            </button>
-            <button
-              type="button"
-              class="layer-move"
+            >▲</el-button>
+            <el-button
+              type="primary"
+              link
+              size="small"
               title="下移一层"
               :disabled="index === layersByZIndex.length - 1"
               @click.stop="moveLayer(el, index, 'down')"
-            >
-              ▼
-            </button>
-            <button
-              type="button"
-              class="layer-visibility"
+            >▼</el-button>
+            <el-button
+              type="primary"
+              link
+              size="small"
               :class="{ 'is-hidden': !el.visible }"
               :title="el.visible ? '隐藏' : '显示'"
               @click.stop="toggleVisible(el)"
-            >
-              👁
-            </button>
+            >👁</el-button>
           </div>
         </div>
         <p v-if="!elements.length" class="layer-empty">暂无元素，从下方添加</p>
           </div>
-        </div>
-      </section>
-
-      <section class="panel-section">
-        <h3 class="section-title collapsible" @click="toggleSection('elements')">
-          <span class="section-chevron">{{ sectionOpen.elements ? '▼' : '▶' }}</span>
-          元素
-        </h3>
-        <div v-show="sectionOpen.elements" class="section-body">
+        </el-collapse-item>
+        <el-collapse-item title="元素" name="elements">
           <div class="tool-grid">
-        <button
+        <el-button
           v-for="t in layoutTools"
           :key="t.type"
           class="tool-btn"
-          :title="t.name"
           @click="addElement(t.type, t.defaults)"
         >
           <span class="tool-icon">{{ t.icon }}</span>
           <span class="tool-name">{{ t.name }}</span>
-        </button>
+        </el-button>
           </div>
-        </div>
-      </section>
-
-      <section class="panel-section">
-        <h3 class="section-title collapsible" @click="toggleSection('rfid')">
-          <span class="section-chevron">{{ sectionOpen.rfid ? '▼' : '▶' }}</span>
-          RFID 标签
-        </h3>
-        <div v-show="sectionOpen.rfid" class="section-body">
+        </el-collapse-item>
+        <el-collapse-item title="RFID 标签" name="rfid">
           <div class="variable-list">
-        <button
+        <el-button
           v-for="v in rfidVariables"
           :key="v.dataField"
           class="variable-btn"
+          text
           @click="addRfidVariable(v)"
         >
           <span class="variable-icon">📌</span>
           {{ v.label }}
-        </button>
+        </el-button>
           </div>
-        </div>
-      </section>
-
-      <section class="panel-section">
-        <h3 class="section-title collapsible" @click="toggleSection('variables')">
-          <span class="section-chevron">{{ sectionOpen.variables ? '▼' : '▶' }}</span>
-          变量
-        </h3>
-        <div v-show="sectionOpen.variables" class="section-body">
+        </el-collapse-item>
+        <el-collapse-item title="变量" name="variables">
           <p class="section-hint">用户创建的变量，点击变量名后在画布上点击放置</p>
           <div class="variable-list">
-        <div
-          v-for="name in customVariableNames"
-          :key="name"
-          class="variable-row"
-        >
-          <button
-            type="button"
-            class="variable-btn"
-            @click="addCustomVariableElement(name)"
-          >
+        <div v-for="name in customVariableNames" :key="name" class="variable-row">
+          <el-button class="variable-btn" text @click="addCustomVariableElement(name)">
             <span class="variable-icon">📌</span>
             <span class="variable-name">{{ name }}</span>
-          </button>
+          </el-button>
           <div class="variable-actions" @click.stop>
-            <button type="button" class="var-action-btn var-action-rename" title="重命名变量" @click="onRenameVariable(name)" aria-label="重命名">
-              <span class="var-action-icon">✎</span>
-            </button>
-            <button type="button" class="var-action-btn var-action-delete" title="删除变量并解除绑定" @click="onDeleteVariable(name)" aria-label="删除">
-              <span class="var-action-icon">🗑</span>
-            </button>
+            <el-button type="primary" link size="small" title="重命名" @click="onRenameVariable(name)">✎</el-button>
+            <el-button type="danger" link size="small" title="删除变量" @click="onDeleteVariable(name)">🗑</el-button>
           </div>
         </div>
-        <button type="button" class="add-variable-btn" @click="onAddCustomVariableClick">
-          + 添加变量
-        </button>
+        <el-button type="primary" plain class="add-variable-btn" @click="onAddCustomVariableClick">+ 添加变量</el-button>
           </div>
-        </div>
-      </section>
+        </el-collapse-item>
+      </el-collapse>
     </div>
   </div>
 </template>
@@ -149,15 +107,7 @@
 import { computed, ref } from 'vue'
 import type { DesignElement, ElementType } from '../types'
 
-const sectionOpen = ref<Record<string, boolean>>({
-  layers: true,
-  elements: true,
-  rfid: true,
-  variables: true,
-})
-function toggleSection(key: string) {
-  sectionOpen.value[key] = !sectionOpen.value[key]
-}
+const activeNames = ref<string[]>(['layers', 'elements', 'rfid', 'variables'])
 
 const draggedId = ref<string | null>(null)
 const draggedIndex = ref<number>(0)
