@@ -56,28 +56,41 @@
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
+/* 元素与 RFID 按钮统一尺寸，避免文本/EPC 框偏大 */
 .tool-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 10px 6px;
+  justify-content: center;
+  min-height: 56px;
+  padding: 8px 6px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   background: #fafafa;
   cursor: pointer;
   transition: background 0.15s;
+  width: 100%;
+  box-sizing: border-box;
 }
 .tool-btn:hover {
   background: #e8f4fd;
   border-color: #2196f3;
 }
+.left-panel .tool-btn.el-button {
+  height: auto;
+  min-height: 56px;
+  margin: 0;
+}
 .tool-icon {
-  font-size: 18px;
-  margin-bottom: 4px;
+  font-size: 16px;
+  margin-bottom: 2px;
+  line-height: 1;
 }
 .tool-name {
   font-size: 12px;
   color: #555;
+  line-height: 1.2;
+  text-align: center;
 }
 .variable-list {
   display: flex;

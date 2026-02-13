@@ -161,6 +161,8 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
   switch (element.type) {
     case 'text': {
       const el = element as TextElement
+      const fontSizePt = el.fontSize ?? 12
+      const fontSizePx = Math.max(8, Math.round((fontSizePt / 72) * dpi))
       const displayFont = ZEBRA_DISPLAY_FONT[el.fontFamily ?? ''] ?? el.fontFamily ?? 'Arial'
       const TextboxClass = (fabric as any).Textbox
       const text = TextboxClass
@@ -168,7 +170,7 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
             left: x,
             top: y,
             width: w,
-            fontSize: el.fontSize ?? 12,
+            fontSize: fontSizePx,
             fill: el.color ?? '#000000',
             fontFamily: displayFont,
             textAlign: el.textAlign ?? 'left',
@@ -180,7 +182,7 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
         : new (fabric as any).FabricText(el.content || '文本', {
             left: x,
             top: y,
-            fontSize: el.fontSize ?? 12,
+            fontSize: fontSizePx,
             fill: el.color ?? '#000000',
             fontFamily: displayFont,
             textAlign: el.textAlign ?? 'left',
@@ -257,10 +259,11 @@ export function createFabricObject(element: DesignElement, dpi: number): fabric.
     case 'variable': {
       const v = element as any
       const displayText = [v.label ?? '', v.sampleValue ?? ''].filter(Boolean).join(' ') || element.type
+      const varFontPx = Math.max(8, Math.round((10 / 72) * dpi))
       const text = new fabric.Text(String(displayText), {
         left: x,
         top: y,
-        fontSize: 10,
+        fontSize: varFontPx,
         fill: '#333',
         ...defaultOpts,
       })
@@ -391,9 +394,11 @@ export function getUpdatesFromFabricObject(obj: fabric.Object, dpi: number, geom
   if (geometryOnly) return updates
 
   if (type === 'text' && obj instanceof fabric.Text) {
+    const fontSizePx = (obj.fontSize ?? 12) as number
+    const fontSizePt = Math.round((fontSizePx * 72) / dpi * 10) / 10
     Object.assign(updates, {
       content: obj.text,
-      fontSize: obj.fontSize,
+      fontSize: Math.max(1, fontSizePt),
       color: obj.fill,
       textAlign: obj.textAlign,
       bold: obj.fontWeight === 'bold',

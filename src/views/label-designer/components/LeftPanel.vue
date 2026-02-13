@@ -63,16 +63,15 @@
           </div>
         </el-collapse-item>
         <el-collapse-item title="RFID 标签" name="rfid">
-          <div class="variable-list">
+          <div class="tool-grid">
         <el-button
           v-for="v in rfidVariables"
           :key="v.dataField"
-          class="variable-btn"
-          text
+          class="tool-btn"
           @click="addRfidVariable(v)"
         >
-          <span class="variable-icon">📌</span>
-          {{ v.label }}
+          <span class="tool-icon">📌</span>
+          <span class="tool-name">{{ v.label }}</span>
         </el-button>
           </div>
         </el-collapse-item>
