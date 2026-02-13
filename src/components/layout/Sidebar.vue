@@ -18,19 +18,29 @@
       </button>
     </div>
 
-    <!-- 用户信息 -->
-    <div class="user-info">
+    <!-- 用户信息：仅名称可点击跳转；折叠时点击整块区域仅展开侧栏 -->
+    <div
+      class="user-info"
+      :class="{ 'is-collapsed': collapsed }"
+      @click="collapsed && $emit('toggle-collapse')"
+    >
       <div class="avatar">
         {{ userInitials }}
       </div>
-      <div v-if="!collapsed" class="user-details">
-        <p class="username">{{ userStore.username }}</p>
-        <p class="nickname">{{ userStore.nickname }}</p>
-      </div>
-      <button 
-        v-if="collapsed" 
+      <template v-if="!collapsed">
+        <div class="user-details">
+          <router-link to="/user-info" class="username-link" title="个人信息">
+            {{ userStore.username }}
+          </router-link>
+          <p class="nickname">{{ userStore.nickname }}</p>
+        </div>
+      </template>
+      <button
+        v-if="collapsed"
+        type="button"
         class="expand-btn"
-        @click="$emit('toggle-collapse')"
+        title="展开侧边栏"
+        @click.stop="$emit('toggle-collapse')"
       >
         &gt;
       </button>
@@ -87,12 +97,12 @@ const userInitials = computed(() => {
 })
 
 // 菜单项：模板设置 = 标签设计模块列表，创建/编辑进入设计器；连接打印 = 打印机连接与打印
+// 用户信息页仅通过顶部「个人信息」或侧栏点击用户名进入，不在此菜单中
 const menuItems: MenuItem[] = [
   { path: '/dashboard', title: '仪表盘', icon: '🏠' },
   { path: '/label-designer', title: '模板设置', icon: '🏷️' },
   { path: '/connect-print', title: '连接打印', icon: '🖨️' },
-  { path: '/nothing', title: '功能页面', icon: '📄' },
-  { path: '/user-info', title: '用户信息', icon: '👤' }
+  { path: '/nothing', title: '功能页面', icon: '📄' }
 ]
 </script>
 
