@@ -5,6 +5,9 @@
 
 export type ElementType = 'text' | 'rectangle' | 'line' | 'ellipse' | 'barcode' | 'image' | 'variable'
 
+/** 打印方向，与后端 orientation 一致 */
+export type PrintOrientation = 'portrait' | 'landscape'
+
 /** 画布配置 */
 export interface CanvasConfig {
   width: number   // mm
@@ -12,6 +15,8 @@ export interface CanvasConfig {
   dpi: number
   backgroundColor: string
   gridEnabled?: boolean
+  /** 打印方向，默认 portrait */
+  orientation?: PrintOrientation
 }
 
 /** 基础元素（所有元素必有） */

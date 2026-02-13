@@ -36,6 +36,14 @@
         <el-option :value="300" label="300 DPI" />
         <el-option :value="600" label="600 DPI" />
       </el-select>
+      <el-select
+        :model-value="config.orientation ?? 'portrait'"
+        class="orientation-select"
+        @update:model-value="onOrientationChange"
+      >
+        <el-option value="portrait" label="纵向" />
+        <el-option value="landscape" label="横向" />
+      </el-select>
     </div>
     <div class="toolbar-right">
       <el-button type="primary" :icon="DocumentCopy" @click="emit('save')">保存</el-button>
@@ -62,17 +70,20 @@ const emit = defineEmits<{
   back: []
 }>()
 
-function emitConfig(key: keyof CanvasConfig, value: number) {
-  emit('config-update', { [key]: value })
+function emitConfig(update: Partial<CanvasConfig>) {
+  emit('config-update', update)
 }
 function onWidthChange(v: number | undefined) {
-  if (v != null) emitConfig('width', v)
+  if (v != null) emitConfig({ width: v })
 }
 function onHeightChange(v: number | undefined) {
-  if (v != null) emitConfig('height', v)
+  if (v != null) emitConfig({ height: v })
 }
 function onDpiChange(v: number | string) {
-  emitConfig('dpi', Number(v))
+  emitConfig({ dpi: Number(v) })
+}
+function onOrientationChange(v: string) {
+  if (v === 'portrait' || v === 'landscape') emitConfig({ orientation: v })
 }
 </script>
 

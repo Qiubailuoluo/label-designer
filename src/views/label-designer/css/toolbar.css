@@ -49,6 +49,7 @@
 .toolbar .template-name-input { width: 180px; }
 .toolbar .num-input { width: 90px; }
 .toolbar .dpi-select { width: 100px; }
+.toolbar .orientation-select { width: 90px; }
 .toolbar .el-button--default { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.5); color: #fff; }
 .toolbar .el-button--default:hover { background: rgba(255,255,255,0.35); color: #fff; }
 .toolbar .el-input__wrapper { background: rgba(255,255,255,0.95); }

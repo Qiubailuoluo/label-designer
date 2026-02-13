@@ -70,6 +70,7 @@ const canvasConfig = ref<CanvasConfig>({
   dpi: 300,
   backgroundColor: '#ffffff',
   gridEnabled: true,
+  orientation: 'portrait',
 })
 const elements = ref<DesignElement[]>([])
 const customVariableNames = ref<string[]>([])

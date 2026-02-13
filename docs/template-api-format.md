@@ -6,7 +6,7 @@
 
 ## 1. 保存模板（POST 请求体）
 
-前端当前发送的 `template.config` 结构如下（在原有基础上**新增** `customVariableNames`，元素**新增** `dataField` 等）：
+前端当前发送的请求体结构如下：**width、height、dpi、orientation 仅出现在 template 下**，`config.canvas` 中不再重复 width/height/dpi，仅保留 backgroundColor、unit。
 
 ```json
 {
@@ -16,13 +16,12 @@
     "description": "RFID标签设计模板",
     "width": 100,
     "height": 60,
+    "dpi": 300,
+    "orientation": "portrait",
     "category": "rfid_label",
     "config": {
       "metadata": { "version": "1.0" },
       "canvas": {
-        "width": 100,
-        "height": 60,
-        "dpi": 300,
         "backgroundColor": "#ffffff",
         "unit": "mm"
       },
@@ -70,11 +69,16 @@
 }
 ```
 
-### 新增/变更字段说明
+### 字段说明（含与后端对齐的布局字段）
 
 | 位置 | 字段 | 类型 | 说明 |
 |------|------|------|------|
-| `config` | **customVariableNames** | `string[]` | **新增**。用户自定义变量名列表，如 `["变量1", "变量2"]`，随模板保存。 |
+| `template` | **width** | `number` | 画布宽度（mm），与后端一致，仅在此处保存。 |
+| `template` | **height** | `number` | 画布高度（mm），仅在此处保存。 |
+| `template` | **dpi** | `number` | 分辨率（如 300），仅在此处保存。 |
+| `template` | **orientation** | `string` | 打印方向：`"portrait"`（纵向）或 `"landscape"`（横向），与后端 `orientation` 一致，默认 `"portrait"`。 |
+| `config.canvas` | — | — | **不再包含** width、height、dpi，仅保留 `backgroundColor`、`unit`，避免与 template 重复。 |
+| `config` | **customVariableNames** | `string[]` | 用户自定义变量名列表，如 `["变量1", "变量2"]`，随模板保存。 |
 | `elements[].type === 'text'` | **dataField** | `string` 可选 | **新增**。绑定变量名（如 `变量1`、`EPC`）。为空或不传表示不绑定，使用固定 `content`。 |
 | `elements[].type === 'barcode'` | **dataField** | `string` 可选 | **新增**。绑定变量名，打印时用 Excel 列替换条码内容。 |
 | `elements[].type === 'variable'` | **dataField** | `string` | **原为** `"EPC" \| "TID" \| "User Data"`，**现为任意字符串**，如 `变量1`、`变量2`、`EPC`、`TID`、`User Data`。 |
@@ -85,13 +89,15 @@
 
 ## 2. 加载模板（GET 响应）
 
-前端期望从接口拿到结构如下（与现有格式兼容，仅补充字段）：
+前端期望从接口拿到结构如下（与保存结构对应）：
 
-- 模板根或 `data.config` 中需包含：
+- **模板根（data）**：建议返回 `id`、`name`、`width`、`height`、`dpi`、`orientation`（与保存时一致）。前端会优先从 `data` 根级读取这些字段，若不存在则从 `config.canvas` 回退。
+- **data.config** 中需包含：
+  - `config.canvas`：至少含 `backgroundColor`、`unit`；若后端仍返回 `width`/`height`/`dpi`，前端会用作回退。
   - `config.elements`：元素数组，每项可含上述 `dataField`。
-  - **config.customVariableNames**：`string[]`，用户变量名列表，如 `["变量1", "变量2"]`。若后端暂无该字段，前端会退化为 `[]`，并从元素中的 `dataField` 推断用户变量（变量类型且非 EPC/TID/User Data 的会合并到列表）。
+  - **config.customVariableNames**：`string[]`，用户变量名列表。若后端暂无该字段，前端会退化为 `[]`，并从元素中的 `dataField` 推断用户变量。
 
-即：**保存时**把 `customVariableNames` 和每个元素的 `dataField` 写入你现有的模板存储（如 JSON 或 DB 的 config 字段）；**加载时**在 `config` 里返回同样结构。若后端暂时不存 `customVariableNames`，只存元素的 `dataField`，前端也能工作，只是左侧「变量」列表会在加载时从元素中推断出来。
+即：**保存时**把 template 级的 width、height、dpi、orientation 与 config（含 canvas、customVariableNames、elements）写入存储；**加载时**在 data 根级返回 width、height、dpi、orientation，在 config 里返回 canvas、elements、customVariableNames。
 
 ---
 

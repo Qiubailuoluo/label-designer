@@ -110,7 +110,7 @@ export interface SavePayload {
   customVariableNames?: string[]
 }
 
-/** 保存模板（新建或覆盖），返回模板 id */
+/** 保存模板（新建或覆盖），返回模板 id。width/height/dpi/orientation 仅在 template 下，canvas 不再重复。 */
 export async function saveTemplate(payload: SavePayload): Promise<{ id: string }> {
   const body = {
     template: {
@@ -119,13 +119,12 @@ export async function saveTemplate(payload: SavePayload): Promise<{ id: string }
       description: 'RFID标签设计模板',
       width: payload.config.width,
       height: payload.config.height,
+      dpi: payload.config.dpi,
+      orientation: payload.config.orientation ?? 'portrait',
       category: 'rfid_label',
       config: {
         metadata: { version: '1.0' },
         canvas: {
-          width: payload.config.width,
-          height: payload.config.height,
-          dpi: payload.config.dpi,
           backgroundColor: payload.config.backgroundColor ?? '#ffffff',
           unit: 'mm',
         },
@@ -236,21 +235,29 @@ export async function loadTemplate(id: string): Promise<LoadedTemplate> {
   const res = await request(`${BASE}/templates/${id}`)
   const json = await parseResponse(res)
   const data = json?.data ?? json
-  const config = data?.config ?? {}
+  // 兼容 data 即模板 或 data.template 嵌套一层
+  const template = data?.template ?? data
+  const config = template?.config ?? {}
   const canvas = config?.canvas ?? {}
   const elementsRaw = config?.elements ?? []
   const customVariableNames = Array.isArray(config?.customVariableNames) ? config.customVariableNames : []
+  const width = Number(template?.width ?? canvas?.width ?? 100)
+  const height = Number(template?.height ?? canvas?.height ?? 60)
+  const orientation = (template?.orientation ?? canvas?.orientation ?? config?.orientation ?? 'portrait') as 'portrait' | 'landscape'
+  // 后端可能把 dpi 放在模板根、config 或 config.canvas，按优先级依次回退
+  const dpi = Number(template?.dpi ?? config?.dpi ?? canvas?.dpi ?? 300)
   return {
-    id: data?.id ?? id,
-    name: data?.name ?? '未命名',
-    width: Number(data?.width ?? canvas?.width ?? 100),
-    height: Number(data?.height ?? canvas?.height ?? 60),
+    id: template?.id ?? id,
+    name: template?.name ?? '未命名',
+    width,
+    height,
     config: {
-      width: Number(data?.width ?? canvas?.width ?? 100),
-      height: Number(data?.height ?? canvas?.height ?? 60),
-      dpi: Number(canvas?.dpi ?? 300),
+      width,
+      height,
+      dpi,
       backgroundColor: canvas?.backgroundColor ?? '#ffffff',
       gridEnabled: true,
+      orientation: orientation === 'landscape' ? 'landscape' : 'portrait',
     },
     elements: elementsRaw.map(backendElementToDesign),
     customVariableNames: customVariableNames.map((s: unknown) => String(s)),
